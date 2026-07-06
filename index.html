@@ -1,0 +1,1128 @@
+<!-- Laser Chess — verified engine (cross-checked vs pykhet, 2769/2769 plies) + negamax AI -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Laser Chess</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#080b12">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LaserChess">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --obsidian:#080b12; --board:#0d121c; --panel:#101724; --panel2:#0c121d;
+    --edge:#223049; --grid:#182238; --grid2:#141d30;
+    --ink:#e9eef7; --muted:#7d8ba3; --faint:#54617a;
+    --silver:#69d8ff; --silver-soft:#b6ecff; --beam-s:#37e6ff;
+    --red:#ff5c76; --red-soft:#ffb2be; --beam-r:#ff2f52;
+    --gold:#ffd47a;
+    --shadow:0 18px 50px -20px rgba(0,0,0,.8);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:
+      radial-gradient(1200px 700px at 15% -10%, #12203a 0%, transparent 55%),
+      radial-gradient(1000px 640px at 110% 120%, #241226 0%, transparent 55%),
+      var(--obsidian);
+    color:var(--ink);
+    font-family:"Chakra Petch",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    padding:22px 16px 40px;
+  }
+  .wrap{max-width:660px;margin:0 auto}
+  header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+  .brand{display:flex;flex-direction:column;gap:2px}
+  .brand h1{
+    font-size:clamp(26px,7vw,40px);font-weight:700;letter-spacing:.16em;margin:0;line-height:1;
+    background:linear-gradient(92deg,var(--silver) 0%,#dff6ff 45%,var(--red) 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-transform:uppercase;
+  }
+  .brand .sub{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.28em;color:var(--faint);text-transform:uppercase}
+  .turnchip{
+    font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+    padding:9px 13px;border-radius:999px;border:1px solid var(--edge);background:var(--panel);
+    display:flex;align-items:center;gap:9px;white-space:nowrap;
+  }
+  .dot{width:9px;height:9px;border-radius:50%;box-shadow:0 0 10px currentColor}
+  .s-col{color:var(--silver)} .r-col{color:var(--red)}
+
+  .boardwrap{position:relative;border-radius:16px;padding:12px;
+    background:linear-gradient(180deg,var(--panel) 0%,var(--panel2) 100%);
+    border:1px solid var(--edge);box-shadow:var(--shadow)}
+  svg.board{width:100%;height:auto;display:block;touch-action:manipulation}
+  .cellhit{fill:transparent;cursor:pointer}
+  .cellhit.disabled{cursor:default}
+  .rotbtn{cursor:pointer}
+  .rotbtn .bg{fill:#0f1b2e;stroke:var(--edge);stroke-width:1.5}
+  .rotbtn:hover .bg{fill:#16263f;stroke:#4aa9d8}
+  .rotbtn text{fill:var(--ink);font-size:15px;font-weight:600;text-anchor:middle;font-family:"Chakra Petch",sans-serif;pointer-events:none}
+
+  .statusbar{
+    display:flex;align-items:center;gap:10px;margin:14px 2px 8px;min-height:22px;
+    font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--muted);letter-spacing:.02em;
+  }
+  .statusbar b{color:var(--ink);font-weight:600}
+  .spinner{width:13px;height:13px;border-radius:50%;border:2px solid var(--edge);border-top-color:var(--red);animation:spin .7s linear infinite;flex:0 0 auto}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .controlstrip{
+    min-height:52px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:10px 12px;border-radius:12px;border:1px solid var(--edge);
+    background:var(--panel);margin-bottom:12px;
+  }
+  .controlstrip .lbl{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted);letter-spacing:.06em}
+  .controlstrip .hint{color:var(--faint);font-size:12px;font-family:"IBM Plex Mono",monospace}
+  button{
+    font-family:"Chakra Petch",sans-serif;font-weight:600;letter-spacing:.04em;
+    background:#16203200;color:var(--ink);border:1px solid var(--edge);border-radius:9px;
+    padding:8px 13px;cursor:pointer;transition:.15s;font-size:13px;
+  }
+  button:hover{border-color:#3a4d6f;background:#1a2740}
+  button:active{transform:translateY(1px)}
+  button:disabled{opacity:.4;cursor:default}
+  button.rot{min-width:44px;font-size:16px;line-height:1;padding:8px 10px}
+  button.primary{border-color:#2f6f86;color:var(--silver-soft);background:#0f2733}
+  button.primary:hover{background:#12303f}
+
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+  .seg{display:inline-flex;border:1px solid var(--edge);border-radius:9px;overflow:hidden}
+  .seg button{border:0;border-radius:0;border-right:1px solid var(--edge);padding:8px 12px}
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:#182a44;color:#dff2ff}
+  .seg.red button.on{background:#331722;color:var(--red-soft)}
+
+  .legend{margin-top:14px;border:1px solid var(--edge);border-radius:12px;background:var(--panel);overflow:hidden}
+  .legend summary{cursor:pointer;padding:12px 14px;font-weight:600;letter-spacing:.05em;list-style:none;
+    display:flex;align-items:center;justify-content:space-between}
+  .legend summary::-webkit-details-marker{display:none}
+  .legend summary::after{content:"+";color:var(--muted);font-family:"IBM Plex Mono",monospace}
+  .legend[open] summary::after{content:"–"}
+  .legend .body{padding:2px 16px 16px;color:var(--muted);font-size:13.5px;line-height:1.55}
+  .legend .body b{color:var(--ink);font-weight:600}
+  .legend .grid{display:grid;grid-template-columns:34px 1fr;gap:9px 12px;align-items:center;margin:12px 0 4px}
+  .legend .grid svg{width:34px;height:34px}
+
+  .tally{display:flex;gap:16px;font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted);margin-left:auto}
+  .tally .n{color:var(--ink);font-weight:600}
+
+  .overlay{position:absolute;inset:0;border-radius:16px;display:none;align-items:center;justify-content:center;
+    background:rgba(6,9,15,.82);backdrop-filter:blur(3px);z-index:5;text-align:center;padding:20px}
+  .overlay.show{display:flex}
+  .overlay .card{max-width:340px}
+  .overlay h2{font-size:30px;letter-spacing:.1em;margin:0 0 8px;text-transform:uppercase}
+  .overlay p{color:var(--muted);margin:0 0 18px;font-family:"IBM Plex Mono",monospace;font-size:13px}
+
+  /* ---- Desktop: give the board real room ---- */
+  @media (min-width:701px){
+    .wrap{max-width:840px}
+  }
+  /* ---- Mobile: board-first full-screen stage, big tap targets ---- */
+  @media (max-width:700px){
+    body{padding:0 0 30px}
+    .wrap{max-width:none}
+    header.top{padding:16px 12px 4px}
+    .toolbar{padding:0 12px}
+    .gamestage{min-height:100svh;display:flex;flex-direction:column;justify-content:center;padding:6px 3px}
+    .boardwrap{padding:5px;border-radius:10px}
+    button{padding:14px 18px;font-size:16px;border-radius:12px}
+    .seg button{padding:13px 15px;font-size:15px}
+    .controlstrip{min-height:68px;padding:12px;margin:0 4px 10px}
+    .controlstrip .lbl{font-size:14px}
+    .controlstrip .hint{font-size:13px}
+    .statusbar{font-size:13px;padding:0 8px;margin:10px 2px 6px}
+    .tally{width:100%;margin:6px 0 0;justify-content:flex-start;flex-wrap:wrap}
+    .legend{margin:16px 10px 0}
+    .legend summary{padding:15px 16px}
+  }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Laser&nbsp;Chess</h1>
+      <span class="sub">mirrors · beams · one exposed pharaoh</span>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+      <div class="turnchip" id="ratingchip" title="Your Elo rating — every AI level has its own rating; wins and losses move yours like chess.com">⚡&nbsp;<b id="ratingval" style="color:var(--gold)">800</b>&nbsp;<span id="ratingdelta" style="display:none"></span></div>
+      <div class="turnchip" id="scorechip" title="Session score — survives New game, resets on reload">🏆&nbsp;You&nbsp;<b id="scoreYou" style="color:var(--silver)">0</b>&nbsp;·&nbsp;<b id="scoreAI" style="color:var(--red)">0</b>&nbsp;AI</div>
+      <div class="turnchip" id="turnchip"><span class="dot s-col" style="color:var(--silver)"></span><span id="turntext">Silver to move</span></div>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <button class="primary" id="newgame">↻ New game</button>
+    <button id="undo" disabled>↶ Undo</button>
+    <span class="lbl" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted)">You&nbsp;play</span>
+    <span class="seg" id="sideseg">
+      <button data-side="silver" class="on">Silver&nbsp;(1st)</button>
+      <button data-side="red">Red&nbsp;(2nd)</button>
+    </span>
+    <span class="lbl" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted)">AI</span>
+    <span class="seg red" id="diffseg">
+      <button data-tier="casual" class="on">Casual</button>
+      <button data-tier="sharp">Sharp</button>
+      <button data-tier="brutal">Brutal</button>
+      <button data-adaptive="1" id="adaptbtn">Adaptive</button>
+    </span>
+  </div>
+
+  <div class="gamestage" id="gamestage">
+  <div class="boardwrap">
+    <svg class="board" id="svg" viewBox="0 0 640 524" aria-label="Laser Chess board"></svg>
+    <div class="overlay" id="overlay"><div class="card">
+      <h2 id="ovtitle">Silver wins</h2>
+      <p id="ovtext">Pharaoh down.</p>
+      <button class="primary" id="ovnew">Play again</button>
+    </div></div>
+  </div>
+
+  <div class="statusbar" id="statusbar"><span id="statustext">Select one of your pieces to begin.</span>
+    <span class="tally"><span>Moves <span class="n" id="movecount">0</span></span><span>⏱ <span class="n" id="gametime">0:00</span></span><span>Silver lost <span class="n" id="lostS">0</span></span><span>Red lost <span class="n" id="lostR">0</span></span></span>
+  </div>
+
+  <div class="controlstrip" id="controlstrip">
+    <span class="hint">Tap a piece to see its moves. After every move your laser fires automatically.</span>
+  </div>
+  </div><!-- /gamestage -->
+
+  <details class="legend">
+    <summary>How to play &amp; piece guide</summary>
+    <div class="body">
+      <b>Goal:</b> bounce your laser into the enemy Pharaoh. Your laser fires automatically at the end of every one of your turns — it can hit your own pieces too, so watch the whole path. A turn is either moving one piece to an adjacent square (any of 8 directions) <i>or</i> rotating one piece 90°. The Sphinx can't move, only rotate — that re-aims your beam. <b>Striped squares are reserved territory:</b> only pieces of that color can enter them (red can never stand on blue-striped squares, and vice versa).
+      <div class="grid" id="legendgrid"></div>
+      <b style="color:var(--silver-soft)">Pyramid</b> — one mirror on the shiny diagonal; bounces the beam 90°. The two flat sides are vulnerable: a beam hitting those destroys it.<br>
+      <b style="color:var(--silver-soft)">Scarab</b> — a double mirror (full diagonal). Never destroyed, and it can swap places with an adjacent Pyramid or Anubis of either color.<br>
+      <b style="color:var(--silver-soft)">Anubis</b> — a blocker. The armored front face absorbs a beam with no damage; hit from any other side, it dies.<br>
+      <b style="color:var(--silver-soft)">Pharaoh</b> — your king. Vulnerable on all sides. If it's hit, you lose.<br>
+      <b style="color:var(--silver-soft)">Sphinx</b> — your laser emitter, fixed in the corner. Rotating it is a full turn.
+    </div>
+  </details>
+</div>
+
+<script>
+/* ===================== VERIFIED ENGINE (inlined) ===================== */
+(function (root) {
+  "use strict";
+  var DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+  var OPP = { up: "down", down: "up", left: "right", right: "left" };
+  var CW = { up: "right", right: "down", down: "left", left: "up" };
+  var CCW = { up: "left", left: "down", down: "right", right: "up" };
+  var DIR2DEG = { up: 0, right: 90, down: 180, left: 270 };
+  var PYR = {
+    up: { down: "left", right: "right" }, down: { left: "left", up: "right" },
+    left: { right: "down", up: "up" }, right: { down: "down", left: "up" }
+  };
+  function scarabBounce(orient, light) {
+    if (orient === "down" || orient === "up") return { up: "left", down: "right", left: "up", right: "down" }[light];
+    return { up: "right", down: "left", left: "down", right: "up" }[light];
+  }
+  function bounce(piece, light) {
+    if (piece.type === "pyramid") { var row = PYR[light]; return row ? row[piece.orient] || null : null; }
+    if (piece.type === "scarab") return scarabBounce(piece.orient, light);
+    return null;
+  }
+  function key(x, y) { return x + "," + y; }
+  function onBoard(x, y) { return x >= 0 && x < 10 && y >= 0 && y < 8; }
+  function territory(x, y) {
+    if (x === 0 || (x === 8 && y === 0) || (x === 8 && y === 7)) return "silver";
+    if (x === 9 || (x === 1 && y === 0) || (x === 1 && y === 7)) return "red";
+    return "blank";
+  }
+  function classicSetup() {
+    var P = [];
+    function add(x, y, color, type, orient) { P.push({ x: x, y: y, piece: { color: color, type: type, orient: orient } }); }
+    add(0,0,"silver","sphinx","down"); add(4,0,"silver","anubis","down"); add(5,0,"silver","pharaoh","down");
+    add(6,0,"silver","anubis","down"); add(7,0,"silver","pyramid","right"); add(2,1,"silver","pyramid","down");
+    add(0,3,"silver","pyramid","up"); add(0,4,"silver","pyramid","right"); add(7,3,"silver","pyramid","right");
+    add(4,3,"silver","scarab","up"); add(5,3,"silver","scarab","left"); add(6,5,"silver","pyramid","right");
+    add(7,4,"silver","pyramid","up");
+    add(9,7,"red","sphinx","up"); add(5,7,"red","anubis","up"); add(4,7,"red","pharaoh","up");
+    add(3,7,"red","anubis","up"); add(2,7,"red","pyramid","left"); add(7,6,"red","pyramid","up");
+    add(9,4,"red","pyramid","down"); add(9,3,"red","pyramid","left"); add(2,4,"red","pyramid","left");
+    add(5,4,"red","scarab","down"); add(4,4,"red","scarab","right"); add(2,3,"red","pyramid","down");
+    add(3,2,"red","pyramid","left");
+    return P;
+  }
+  function newGame() {
+    var board = {};
+    classicSetup().forEach(function (s) { board[key(s.x, s.y)] = { color: s.piece.color, type: s.piece.type, orient: s.piece.orient }; });
+    return { board: board, turn: "silver", winner: null };
+  }
+  function cloneState(s) {
+    var b = {}; for (var k in s.board) { var p = s.board[k]; b[k] = { color: p.color, type: p.type, orient: p.orient }; }
+    return { board: b, turn: s.turn, winner: s.winner };
+  }
+  function pieceAt(s, x, y) { return s.board[key(x, y)] || null; }
+  function sphinxPos(s, color) {
+    for (var k in s.board) { var p = s.board[k]; if (p.type === "sphinx" && p.color === color) { var xy = k.split(","); return { x: +xy[0], y: +xy[1] }; } }
+    return null;
+  }
+  function canSwap(from, to) { if (!to) return true; if (from.type !== "scarab") return false; return to.type === "pyramid" || to.type === "anubis"; }
+  function validRotations(p) {
+    if (p.type === "pharaoh") return [];
+    if (p.type === "sphinx") return [p.color === "silver" ? (p.orient === "down" ? "right" : "down") : (p.orient === "up" ? "left" : "up")];
+    return [CCW[p.orient], CW[p.orient]];
+  }
+  var NEIGHBORS = [[1,0],[-1,0],[0,1],[0,-1],[1,-1],[1,1],[-1,1],[-1,-1]];
+  function movesForPiece(s, x, y) {
+    var p = pieceAt(s, x, y); if (!p) return [];
+    var out = [];
+    if (p.type !== "sphinx") {
+      for (var i = 0; i < NEIGHBORS.length; i++) {
+        var nx = x + NEIGHBORS[i][0], ny = y + NEIGHBORS[i][1];
+        if (!onBoard(nx, ny)) continue;
+        var t = territory(nx, ny); if (t !== "blank" && t !== p.color) continue;
+        var target = pieceAt(s, nx, ny);
+        if (canSwap(p, target)) out.push({ t: target ? "swap" : "move", x: x, y: y, tx: nx, ty: ny });
+      }
+    }
+    validRotations(p).forEach(function (o) { out.push({ t: "rotate", x: x, y: y, o: o }); });
+    return out;
+  }
+  function legalMoves(s, color) {
+    var out = [];
+    for (var k in s.board) { if (s.board[k].color !== color) continue; var xy = k.split(","); out = out.concat(movesForPiece(s, +xy[0], +xy[1])); }
+    return out;
+  }
+  function applyMove(s, m) {
+    var ns = cloneState(s);
+    if (m.t === "rotate") ns.board[key(m.x, m.y)].orient = m.o;
+    else if (m.t === "swap") { var a = ns.board[key(m.x, m.y)], b = ns.board[key(m.tx, m.ty)]; ns.board[key(m.x, m.y)] = b; ns.board[key(m.tx, m.ty)] = a; }
+    else { ns.board[key(m.tx, m.ty)] = ns.board[key(m.x, m.y)]; delete ns.board[key(m.x, m.y)]; }
+    return ns;
+  }
+  function laserPath(s, color) {
+    var sp = sphinxPos(s, color), sph = pieceAt(s, sp.x, sp.y);
+    var dir = sph.orient, x = sp.x, y = sp.y;
+    var path = [{ x: x, y: y, dir: dir, type: "start" }], guard = 0;
+    while (guard++ < 400) {
+      var d = DIRS[dir], nx = x + d[0], ny = y + d[1];
+      if (!onBoard(nx, ny)) { path.push({ x: nx, y: ny, dir: dir, type: "exit" }); break; }
+      var pc = pieceAt(s, nx, ny);
+      if (pc) {
+        var nd = bounce(pc, dir);
+        if (nd == null) { path.push({ x: nx, y: ny, dir: dir, type: "hit" }); break; }
+        path.push({ x: nx, y: ny, dir: dir, type: "bounce", newDir: nd }); dir = nd; x = nx; y = ny;
+      } else { path.push({ x: nx, y: ny, dir: dir, type: "through" }); x = nx; y = ny; }
+    }
+    return path;
+  }
+  function fireLaser(s, color) {
+    var path = laserPath(s, color), last = path[path.length - 1], destroyed = null;
+    if (last.type === "hit") {
+      var pc = pieceAt(s, last.x, last.y);
+      var immune = (pc.type === "sphinx") || (pc.type === "anubis" && pc.orient === OPP[last.dir]);
+      if (!immune) {
+        destroyed = { color: pc.color, type: pc.type, x: last.x, y: last.y };
+        delete s.board[key(last.x, last.y)];
+        if (pc.type === "pharaoh") s.winner = pc.color === "silver" ? "red" : "silver";
+      }
+    }
+    return { path: path, destroyed: destroyed, winner: s.winner };
+  }
+  function applyTurn(s, m, color) {
+    var ns = applyMove(s, m); var res = fireLaser(ns, color); ns.turn = color === "silver" ? "red" : "silver";
+    return { state: ns, path: res.path, destroyed: res.destroyed, winner: ns.winner };
+  }
+  root.KhetEngine = { newGame:newGame, cloneState:cloneState, legalMoves:legalMoves, movesForPiece:movesForPiece,
+    applyMove:applyMove, fireLaser:fireLaser, laserPath:laserPath, applyTurn:applyTurn, pieceAt:pieceAt,
+    sphinxPos:sphinxPos, territory:territory, key:key, onBoard:onBoard, DIR2DEG:DIR2DEG };
+})(window);
+
+/* ===================== FAST SEARCH ENGINE (verified equivalent to game engine) ===================== */
+/* Fast Khet engine for AI search. Cells packed into Int8Array(80).
+   val = type | orient<<3 | color<<5 ; 0 = empty.
+   type: 1 pharaoh, 2 anubis, 3 pyramid, 4 scarab, 5 sphinx
+   orient: 0 up, 1 right, 2 down, 3 left ; color: 0 silver, 1 red
+   dirs: 0 up(-10), 1 right(+1), 2 down(+10), 3 left(-1)  (cell = y*10+x) */
+window.FastKhet = (function () {
+  var T_PH = 1, T_AN = 2, T_PY = 3, T_SC = 4, T_SX = 5;
+  var ONAME = ["up", "right", "down", "left"];
+  var OIDX = { up: 0, right: 1, down: 2, left: 3 };
+  var DSTEP = [-10, 1, 10, -1];
+  var TERR = new Int8Array(80); // 0 blank, 1 silver, 2 red
+  (function () {
+    for (var y = 0; y < 8; y++) for (var x = 0; x < 10; x++) {
+      var t = 0;
+      if (x === 0 || (x === 8 && (y === 0 || y === 7))) t = 1;
+      else if (x === 9 || (x === 1 && (y === 0 || y === 7))) t = 2;
+      TERR[y * 10 + x] = t;
+    }
+  })();
+  // pyramid: caught dirs bitmask + xor per orient
+  var PY_CATCH = [ (1<<2)|(1<<3), (1<<0)|(1<<3), (1<<0)|(1<<1), (1<<1)|(1<<2) ]; // up,right,down,left
+  var PY_XOR   = [ 3, 1, 3, 1 ];
+  var NB = [];
+  (function () {
+    for (var c = 0; c < 80; c++) {
+      var x = c % 10, y = (c / 10) | 0, list = [];
+      for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        var nx = x + dx, ny = y + dy;
+        if (nx >= 0 && nx < 10 && ny >= 0 && ny < 8) list.push(ny * 10 + nx);
+      }
+      NB.push(list);
+    }
+  })();
+
+  function G() { this.b = new Int8Array(80); this.winner = -1; this.sphinx = [0, 77]; }
+  function typ(v) { return v & 7; }
+  function ori(v) { return (v >> 3) & 3; }
+  function col(v) { return (v >> 5) & 1; }
+  function pack(t, o, c) { return t | (o << 3) | (c << 5); }
+
+  function fromState(s) { // s = KhetEngine state
+    var g = new G();
+    for (var k in s.board) {
+      var xy = k.split(","), c = (+xy[1]) * 10 + (+xy[0]);
+      var p = s.board[k];
+      var t = { pharaoh: T_PH, anubis: T_AN, pyramid: T_PY, scarab: T_SC, sphinx: T_SX }[p.type];
+      var v = pack(t, OIDX[p.orient], p.color === "silver" ? 0 : 1);
+      g.b[c] = v;
+      if (t === T_SX) g.sphinx[p.color === "silver" ? 0 : 1] = c;
+    }
+    g.winner = s.winner === null ? -1 : (s.winner === "silver" ? 0 : 1);
+    return g;
+  }
+  function toStateBoard(g) { // for verification
+    var TN = [null, "pharaoh", "anubis", "pyramid", "scarab", "sphinx"];
+    var out = {};
+    for (var c = 0; c < 80; c++) {
+      var v = g.b[c]; if (!v) continue;
+      out[(c % 10) + "," + ((c / 10) | 0)] = { color: col(v) ? "red" : "silver", type: TN[typ(v)], orient: ONAME[ori(v)] };
+    }
+    return out;
+  }
+
+  // moves: kind 0 move, 1 swap, 2 rotate. m = kind | from<<2 | data<<9  (data = target cell OR orientation)
+  function genMoves(g, color, out) {
+    out.length = 0;
+    for (var c = 0; c < 80; c++) {
+      var v = g.b[c]; if (!v || col(v) !== color) continue;
+      var t = typ(v), o = ori(v);
+      if (t !== T_SX) {
+        var nbs = NB[c];
+        for (var i = 0; i < nbs.length; i++) {
+          var n = nbs[i], terr = TERR[n];
+          if (terr && terr !== color + 1) continue;
+          var w = g.b[n];
+          if (!w) out.push(0 | (c << 2) | (n << 9));
+          else if (t === T_SC) { var wt = typ(w); if (wt === T_PY || wt === T_AN) out.push(1 | (c << 2) | (n << 9)); }
+        }
+      }
+      if (t === T_PH) continue;
+      if (t === T_SX) {
+        var no = color === 0 ? (o === 2 ? 1 : 2) : (o === 0 ? 3 : 0);
+        out.push(2 | (c << 2) | (no << 9));
+      } else {
+        out.push(2 | (c << 2) | (((o + 1) & 3) << 9));
+        out.push(2 | (c << 2) | (((o + 3) & 3) << 9));
+      }
+    }
+    return out;
+  }
+
+  function traceEnd(g, color) { // returns {cell, dir, hit:boolean}; cell=-1 if exits
+    var c = g.sphinx[color], dir = ori(g.b[c]);
+    var x = c % 10, y = (c / 10) | 0, guard = 0;
+    while (guard++ < 200) {
+      if (dir === 0) y--; else if (dir === 1) x++; else if (dir === 2) y++; else x--;
+      if (x < 0 || x > 9 || y < 0 || y > 7) return { cell: -1, dir: dir, hit: false };
+      var cc = y * 10 + x, v = g.b[cc];
+      if (!v) continue;
+      var t = typ(v), o = ori(v);
+      if (t === T_PY) {
+        if (PY_CATCH[o] & (1 << dir)) { dir = dir ^ PY_XOR[o]; continue; }
+        return { cell: cc, dir: dir, hit: true };
+      }
+      if (t === T_SC) { dir = dir ^ ((o & 1) ? 1 : 3); continue; }
+      return { cell: cc, dir: dir, hit: true };
+    }
+    return { cell: -1, dir: dir, hit: false };
+  }
+
+  // apply move + fire laser; returns undo record
+  function makeTurn(g, m, color) {
+    var kind = m & 3, from = (m >> 2) & 127, data = m >> 9;
+    var u = { kind: kind, from: from, data: data, fv: g.b[from], tv: 0, dcell: -1, dval: 0, w: g.winner };
+    if (kind === 2) g.b[from] = pack(typ(u.fv), data, col(u.fv));
+    else { u.tv = g.b[data]; g.b[data] = u.fv; g.b[from] = u.tv; } // move (tv=0) or swap
+    var e = traceEnd(g, color);
+    if (e.hit) {
+      var v = g.b[e.cell], t = typ(v);
+      var immune = t === T_SX || (t === T_AN && ori(v) === (e.dir ^ 2)); // anubis front faces beam
+      if (!immune) {
+        u.dcell = e.cell; u.dval = v; g.b[e.cell] = 0;
+        if (t === T_PH) g.winner = 1 - col(v);
+      }
+    }
+    return u;
+  }
+  function unmakeTurn(g, u) {
+    if (u.dcell >= 0) g.b[u.dcell] = u.dval;
+    if (u.kind === 2) g.b[u.from] = u.fv;
+    else { g.b[u.from] = u.fv; g.b[u.data] = u.tv; }
+    g.winner = u.w;
+  }
+
+  // helpers for eval
+  function pharaohCell(g, color) {
+    var target = pack(T_PH, 0, color) & 39; // type+color bits (orient may differ but pharaoh orient irrelevant)
+    for (var c = 0; c < 80; c++) { var v = g.b[c]; if (v && typ(v) === T_PH && col(v) === color) return c; }
+    return -1;
+  }
+  function beamMinDist(g, color, target) { // min manhattan distance of beam path to target cell
+    if (target < 0) return 99;
+    var tx = target % 10, ty = (target / 10) | 0;
+    var c = g.sphinx[color], dir = ori(g.b[c]);
+    var x = c % 10, y = (c / 10) | 0, best = 99, guard = 0;
+    while (guard++ < 200) {
+      if (dir === 0) y--; else if (dir === 1) x++; else if (dir === 2) y++; else x--;
+      if (x < 0 || x > 9 || y < 0 || y > 7) break;
+      var d = Math.abs(x - tx) + Math.abs(y - ty);
+      if (d < best) best = d;
+      var cc = y * 10 + x, v = g.b[cc];
+      if (!v) continue;
+      var t = typ(v), o = ori(v);
+      if (t === T_PY) { if (PY_CATCH[o] & (1 << dir)) { dir = dir ^ PY_XOR[o]; continue; } break; }
+      if (t === T_SC) { dir = dir ^ ((o & 1) ? 1 : 3); continue; }
+      break;
+    }
+    return best;
+  }
+
+  return { fromState: fromState, toStateBoard: toStateBoard, genMoves: genMoves, makeTurn: makeTurn,
+    unmakeTurn: unmakeTurn, traceEnd: traceEnd, pharaohCell: pharaohCell, beamMinDist: beamMinDist,
+    typ: typ, ori: ori, col: col, T: { PH: T_PH, AN: T_AN, PY: T_PY, SC: T_SC, SX: T_SX }, NB: NB, ONAME: ONAME };
+})();
+
+
+/* ===================== AI (iterative deepening negamax + positional eval) ===================== */
+/* Fast AI: iterative-deepening negamax on the fast engine */
+window.KhetAI = (function (F) {
+  var BIG = 1e6;
+  var MATV = [0, 0, 55, 100, 0, 0]; // by type: pharaoh/anubis/pyramid/scarab/sphinx -> idx T
+  MATV[F.T.PY] = 100; MATV[F.T.AN] = 55; MATV[F.T.PH] = 0; MATV[F.T.SC] = 0; MATV[F.T.SX] = 0;
+
+  function evaluate(g, color) {
+    if (g.winner >= 0) return g.winner === color ? BIG : -BIG;
+    var opp = 1 - color, sc = 0;
+    var myPh = -1, opPh = -1;
+    var scMine = [], scOpp = [];
+    for (var c = 0; c < 80; c++) {
+      var v = g.b[c]; if (!v) continue;
+      var t = F.typ(v), pcol = F.col(v);
+      var sign = pcol === color ? 1 : -1;
+      sc += sign * MATV[t];
+      if (t === F.T.PH) { if (pcol === color) myPh = c; else opPh = c; }
+      else if (t === F.T.SC) { (pcol === color ? scMine : scOpp).push(c); }
+    }
+    // scarab pressure (invincible attackers): reward proximity to enemy pharaoh
+    function md(a, b) { return Math.abs(a % 10 - b % 10) + Math.abs(((a / 10) | 0) - ((b / 10) | 0)); }
+    for (var i = 0; i < scMine.length; i++) if (opPh >= 0) sc += (12 - md(scMine[i], opPh)) * 3;
+    for (var j = 0; j < scOpp.length; j++) if (myPh >= 0) sc -= (12 - md(scOpp[j], myPh)) * 3;
+    // pharaoh shelter
+    function shelter(ph, pc) {
+      if (ph < 0) return 0;
+      var n = 0, nbs = F.NB[ph];
+      for (var q = 0; q < nbs.length; q++) {
+        var w = g.b[nbs[q]];
+        if (w && F.col(w) === pc) n += (F.typ(w) === F.T.AN ? 14 : 8);
+      }
+      return n > 44 ? 44 : n;
+    }
+    sc += shelter(myPh, color) - shelter(opPh, opp);
+    // beam pressure: my beam near their pharaoh (good), their beam near mine (worse)
+    var atk = F.beamMinDist(g, color, opPh), def = F.beamMinDist(g, opp, myPh);
+    if (atk > 14) atk = 14; if (def > 14) def = 14;
+    sc += (14 - atk) * 6 - (14 - def) * 8;
+    return sc;
+  }
+
+  function Timeout() {}
+  var bufs = []; for (var i = 0; i < 24; i++) bufs.push([]);
+
+  function negamax(g, color, depth, alpha, beta, deadline, nodes) {
+    if (g.winner >= 0) return g.winner === color ? BIG - (30 - depth) : -(BIG - (30 - depth));
+    if (depth === 0) return evaluate(g, color);
+    nodes.n++; if ((nodes.n & 1023) === 0 && Date.now() > deadline) throw new Timeout();
+    var moves = F.genMoves(g, color, bufs[depth]);
+    // order: quick score by capture via make/unmake peek
+    var scored = [];
+    for (var i = 0; i < moves.length; i++) {
+      var u = F.makeTurn(g, moves[i], color);
+      var o = 0;
+      if (g.winner === color) o = BIG; else if (g.winner >= 0) o = -BIG;
+      else if (u.dcell >= 0) { var dv = MATV[F.typ(u.dval)] || 20; o = F.col(u.dval) === color ? -dv : dv + 5; }
+      F.unmakeTurn(g, u);
+      scored.push({ m: moves[i], o: o });
+    }
+    scored.sort(function (a, b) { return b.o - a.o; });
+    var best = -Infinity, opp = 1 - color;
+    for (var k = 0; k < scored.length; k++) {
+      var uu = F.makeTurn(g, scored[k].m, color);
+      var v = -negamax(g, opp, depth - 1, -beta, -alpha, deadline, nodes);
+      F.unmakeTurn(g, uu);
+      if (v > best) best = v;
+      if (best > alpha) alpha = best;
+      if (alpha >= beta) break;
+    }
+    return best;
+  }
+
+  function rootSearch(g, color, depth, deadline, nodes, jitter) {
+    var moves = F.genMoves(g, color, []).slice();
+    var opp = 1 - color, best = -Infinity, bm = moves[0], alpha = -Infinity;
+    // stable pre-order by shallow score
+    var scored = moves.map(function (m) {
+      var u = F.makeTurn(g, m, color); var o = 0;
+      if (g.winner === color) o = BIG; else if (g.winner >= 0) o = -BIG;
+      else if (u.dcell >= 0) { var dv = MATV[F.typ(u.dval)] || 20; o = F.col(u.dval) === color ? -dv : dv + 5; }
+      F.unmakeTurn(g, u); return { m: m, o: o };
+    }).sort(function (a, b) { return b.o - a.o; });
+    for (var i = 0; i < scored.length; i++) {
+      var u2 = F.makeTurn(g, scored[i].m, color);
+      var v = depth <= 1 ? (scored[i].o + evaluate(g, color) * 0.001) : -negamax(g, opp, depth - 1, -Infinity, -alpha, deadline, nodes);
+      F.unmakeTurn(g, u2);
+      if (jitter) v += Math.random() * jitter;
+      if (v > best) { best = v; bm = scored[i].m; }
+      if (best > alpha) alpha = best;
+    }
+    return { move: bm, score: best };
+  }
+
+  function pick(g, color, opts) {
+    var t0 = Date.now(), deadline = t0 + (opts.timeMs || 1200);
+    var nodes = { n: 0 }, best = null, reached = 0;
+    for (var d = 1; d <= (opts.maxDepth || 5); d++) {
+      try {
+        var res = rootSearch(g, color, d, deadline, nodes, d === 1 && opts.jitter ? opts.jitter : 0);
+        best = res; reached = d;
+        if (Math.abs(res.score) > BIG / 2) break;
+        if (Date.now() - t0 > (opts.timeMs || 1200) * 0.30) break;
+      } catch (e) { break; }
+    }
+    return { move: best.move, depth: reached, ms: Date.now() - t0, score: best.score, nodes: nodes.n };
+  }
+  return { pick: pick, evaluate: evaluate };
+})(window.FastKhet);
+
+/* ===================== AI wrapper: verified-engine state in, verified-engine move out ===================== */
+var AI = (function (KE, F, CORE) {
+  function pick(state, colorStr, opts) {
+    var g = F.fromState(state);
+    var r = CORE.pick(g, colorStr === "silver" ? 0 : 1, opts);
+    var m = r.move, kind = m & 3, from = (m >> 2) & 127, data = m >> 9;
+    var x = from % 10, y = (from / 10) | 0;
+    if (kind === 2) return { t: "rotate", x: x, y: y, o: F.ONAME[data] };
+    return { t: kind === 1 ? "swap" : "move", x: x, y: y, tx: data % 10, ty: (data / 10) | 0 };
+  }
+  return { pick: pick };
+})(window.KhetEngine, window.FastKhet, window.KhetAI);
+
+
+/* ===================== UI / RENDER / INTERACTION ===================== */
+(function () {
+  var KE = window.KhetEngine;
+  var CELL = 58, PAD = 30, INS = 10;
+  var mqMobile = (typeof window.matchMedia === "function") ? window.matchMedia("(max-width:700px)") : null;
+  function isMobile() { return mqMobile ? mqMobile.matches : false; }
+  if (mqMobile) {
+    var onMq = function () { render(); };
+    if (mqMobile.addEventListener) mqMobile.addEventListener("change", onMq);
+    else if (mqMobile.addListener) mqMobile.addListener(onMq);
+  }
+  window.addEventListener("resize", function () { if (state) render(); });
+  window.addEventListener("orientationchange", function () { if (state) render(); });
+  var svg = document.getElementById("svg");
+  var el = function (id) { return document.getElementById(id); };
+
+  var TIERS = { casual: { maxDepth: 2, timeMs: 350, jitter: 40 }, sharp: { maxDepth: 4, timeMs: 1400 }, brutal: { maxDepth: 6, timeMs: 3500 } };
+  // Adaptive ladder: win -> +1 level, loss -> -1. p = chance of a shallow "human-ish" move
+  // (shallow search still never misses a mate-in-1 or a free capture).
+  var ADAPT = [null,
+    { full: { maxDepth: 2, timeMs: 150 }, p: 0.55 },
+    { full: { maxDepth: 2, timeMs: 250 }, p: 0.35 },
+    { full: { maxDepth: 2, timeMs: 350 }, p: 0.18 },
+    { full: { maxDepth: 3, timeMs: 600 }, p: 0.10 },
+    { full: { maxDepth: 3, timeMs: 1000 }, p: 0 },
+    { full: { maxDepth: 4, timeMs: 1400 }, p: 0 },
+    { full: { maxDepth: 5, timeMs: 2200 }, p: 0 },
+    { full: { maxDepth: 6, timeMs: 3500 }, p: 0 }];
+  var WEAK = { maxDepth: 1, timeMs: 60, jitter: 60 };
+  var adaptive = false, adaptLevel = 3, adaptDelta = 0;
+  var rating = 800, ratingDelta = 0, ELO_K = 32;          // your Elo; delta remembered for undo
+  var TIER_ELO = { casual: 800, sharp: 1400, brutal: 1800 };
+  function oppRating() { return adaptive ? 400 + (adaptLevel - 1) * 200 : TIER_ELO[tierName]; }
+  // persistence: Claude's artifact viewer uses window.storage; the deployed PWA / local file
+  // falls back to localStorage. All guarded — contexts where neither works stay in-memory.
+  function saveProfile() {
+    var data = JSON.stringify({ rating: rating, score: score, adaptLevel: adaptLevel });
+    try { if (window.storage) { window.storage.set("profile:v1", data).catch(function () {}); return; } } catch (e) {}
+    try { localStorage.setItem("lc-profile-v1", data); } catch (e) {}
+  }
+  async function loadProfile() {
+    var raw = null;
+    try {
+      if (window.storage) { var r = await window.storage.get("profile:v1"); if (r && r.value) raw = r.value; }
+    } catch (e) {}
+    if (!raw) { try { raw = localStorage.getItem("lc-profile-v1"); } catch (e) {} }
+    if (!raw) return;
+    try {
+      var p = JSON.parse(raw);
+      if (typeof p.rating === "number") rating = p.rating;
+      if (p.score) score = p.score;
+      if (typeof p.adaptLevel === "number") adaptLevel = Math.max(1, Math.min(8, p.adaptLevel));
+      updateAdaptLabel(); updateChrome();
+    } catch (e) {}
+  }
+  var moveCount = 0;                       // plies played this game (both sides)
+  var clockBase = 0, clockSince = null;    // elapsed = clockBase + (clockSince ? now - clockSince : 0); pauses at game over
+  var state, humanColor = "silver", aiColor = "red", tier = TIERS.casual, tierName = "casual";
+  var selected = null, selMoves = [], lastPath = null, flashCell = null, busy = false;
+  var lost = { silver: 0, red: 0 };
+  var history = []; // snapshots taken before each human move; undo = back to your last turn
+  var score = { you: 0, ai: 0 }, scoredWinner = null; // session score; scoredWinner guards double-count + undo
+  var gen = 0; // bumped by New game / undo; in-flight turns check it after every await and abandon if stale
+
+  // ---- view mapping: on portrait phones the board renders rotated 90° clockwise ----
+  // Engine coordinates never change; only where things are DRAWN. A uniform rotation of the
+  // whole picture: positions map (x,y) -> (7-y, x) and every drawn orientation rotates CW.
+  var PORT = false; // recomputed at the top of every render
+  var VCW = { up: "right", right: "down", down: "left", left: "up" };
+  function isPortraitView() { return isMobile() && window.innerHeight > window.innerWidth; }
+  function viewCols() { return PORT ? 8 : 10; }
+  function viewRows() { return PORT ? 10 : 8; }
+  function sX(x, y) { return PAD + (PORT ? (7 - y) : x) * CELL; }
+  function sY(x, y) { return PAD + (PORT ? x : y) * CELL; }
+  function viewOrient(o) { return PORT ? VCW[o] : o; }
+  function cx(x) { return PAD + x * CELL; }
+  function cy(y) { return PAD + y * CELL; }
+  function ctr(x, y) { return [sX(x, y) + CELL / 2, sY(x, y) + CELL / 2]; }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  /* ---- piece glyphs (return SVG string positioned at cell x,y) ---- */
+  function cls(color) { return color === "silver" ? "s" : "r"; }
+  function stroke(color) { return color === "silver" ? "var(--silver)" : "var(--red)"; }
+  function soft(color) { return color === "silver" ? "var(--silver-soft)" : "var(--red-soft)"; }
+  function fillw(color) { return color === "silver" ? "rgba(74,201,232,.15)" : "rgba(255,92,118,.15)"; }
+  function beamc(color) { return color === "silver" ? "var(--beam-s)" : "var(--beam-r)"; }
+
+  function corners(x, y) {
+    var X = sX(x, y), Y = sY(x, y);
+    var L = X + INS, R = X + CELL - INS, T = Y + INS, B = Y + CELL - INS;
+    return { L: L, R: R, T: T, B: B, TL: [L, T], TR: [R, T], BL: [L, B], BR: [R, B] };
+  }
+  function poly(pts) { return pts.map(function (p) { return p[0] + "," + p[1]; }).join(" "); }
+
+  function glyphPyramid(x, y, p) {
+    // orient = which way the mirror face points: up = catches beams coming down/from-left etc.
+    var c = corners(x, y), tri, m1, m2;
+    if (p.orient === "up") { tri = [c.TL, c.BL, c.BR]; m1 = c.TL; m2 = c.BR; }        // face up-right
+    else if (p.orient === "down") { tri = [c.TL, c.TR, c.BR]; m1 = c.TL; m2 = c.BR; }  // face down-left
+    else if (p.orient === "right") { tri = [c.TL, c.TR, c.BL]; m1 = c.TR; m2 = c.BL; } // face down-right
+    else { tri = [c.TR, c.BR, c.BL]; m1 = c.TR; m2 = c.BL; }                            // face up-left
+    return '<polygon points="' + poly(tri) + '" fill="' + fillw(p.color) + '" stroke="' + stroke(p.color) + '" stroke-width="1.4" stroke-linejoin="round"/>'
+      + '<line x1="' + m1[0] + '" y1="' + m1[1] + '" x2="' + m2[0] + '" y2="' + m2[1] + '" stroke="' + soft(p.color) + '" stroke-width="3.4" stroke-linecap="round" filter="url(#glow)"/>';
+  }
+  function glyphScarab(x, y, p) {
+    var c = corners(x, y), m1, m2;
+    if (p.orient === "up" || p.orient === "down") { m1 = c.TL; m2 = c.BR; } else { m1 = c.TR; m2 = c.BL; }
+    var r = 8;
+    return '<rect x="' + c.L + '" y="' + c.T + '" width="' + (c.R - c.L) + '" height="' + (c.B - c.T) + '" rx="' + r + '" fill="' + fillw(p.color) + '" stroke="' + stroke(p.color) + '" stroke-width="1.6"/>'
+      + '<line x1="' + m1[0] + '" y1="' + m1[1] + '" x2="' + m2[0] + '" y2="' + m2[1] + '" stroke="' + soft(p.color) + '" stroke-width="3.8" stroke-linecap="round" filter="url(#glow)"/>';
+  }
+  function glyphAnubis(x, y, p) {
+    var c = corners(x, y), r = 7, bar;
+    var bx = c.L, by = c.T, bw = c.R - c.L, bh = c.B - c.T, t = 6;
+    if (p.orient === "up") bar = [c.L, c.T, bw, t];
+    else if (p.orient === "down") bar = [c.L, c.B - t, bw, t];
+    else if (p.orient === "left") bar = [c.L, c.T, t, bh];
+    else bar = [c.R - t, c.T, t, bh];
+    return '<rect x="' + bx + '" y="' + by + '" width="' + bw + '" height="' + bh + '" rx="' + r + '" fill="' + fillw(p.color) + '" stroke="' + stroke(p.color) + '" stroke-width="1.4"/>'
+      + '<rect x="' + bar[0] + '" y="' + bar[1] + '" width="' + bar[2] + '" height="' + bar[3] + '" rx="3" fill="' + soft(p.color) + '" filter="url(#glow)"/>';
+  }
+  function glyphPharaoh(x, y, p) {
+    var ce = ctr(x, y), R = (CELL - 2 * INS) / 2 - 1;
+    return '<circle cx="' + ce[0] + '" cy="' + ce[1] + '" r="' + R + '" fill="' + fillw(p.color) + '" stroke="' + stroke(p.color) + '" stroke-width="1.8"/>'
+      + '<circle cx="' + ce[0] + '" cy="' + ce[1] + '" r="' + (R * 0.62) + '" fill="none" stroke="var(--gold)" stroke-width="1.4" opacity=".85"/>'
+      + '<circle cx="' + ce[0] + '" cy="' + ce[1] + '" r="' + (R * 0.24) + '" fill="var(--gold)" filter="url(#glow)"><animate attributeName="opacity" values="1;.55;1" dur="2.2s" repeatCount="indefinite"/></circle>';
+  }
+  function glyphSphinx(x, y, p) {
+    var c = corners(x, y), ce = ctr(x, y), bw = c.R - c.L, bh = c.B - c.T;
+    var body = '<rect x="' + c.L + '" y="' + c.T + '" width="' + bw + '" height="' + bh + '" rx="6" fill="' + fillw(p.color) + '" stroke="' + stroke(p.color) + '" stroke-width="1.6"/>';
+    var d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[p.orient];
+    var bx = ce[0] + d[0] * (bw / 2 - 3), by = ce[1] + d[1] * (bh / 2 - 3);
+    var barrel = '<line x1="' + ce[0] + '" y1="' + ce[1] + '" x2="' + bx + '" y2="' + by + '" stroke="' + soft(p.color) + '" stroke-width="6" stroke-linecap="round"/>';
+    var muzzle = '<circle cx="' + bx + '" cy="' + by + '" r="4.5" fill="' + beamc(p.color) + '" filter="url(#glow)"/>';
+    return body + barrel + muzzle;
+  }
+  function glyph(x, y, p) {
+    if (p.type === "pyramid") return glyphPyramid(x, y, p);
+    if (p.type === "scarab") return glyphScarab(x, y, p);
+    if (p.type === "anubis") return glyphAnubis(x, y, p);
+    if (p.type === "pharaoh") return glyphPharaoh(x, y, p);
+    return glyphSphinx(x, y, p);
+  }
+
+  /* ---- beam points from a laser path ---- */
+  function beamPoints(path) {
+    var pts = [];
+    for (var i = 0; i < path.length; i++) {
+      var n = path[i];
+      if (n.type === "exit") {
+        var prev = path[i - 1]; var pc = ctr(prev.x, prev.y);
+        var vd = viewOrient(n.dir);
+        var d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[vd];
+        pts.push([pc[0] + d[0] * (CELL / 2), pc[1] + d[1] * (CELL / 2)]);
+      } else pts.push(ctr(n.x, n.y));
+    }
+    return pts;
+  }
+
+  /* ---- full render ---- */
+  function render() {
+    if (!state) return;
+    PORT = isPortraitView();
+    svg.setAttribute("viewBox", "0 0 " + (PAD * 2 + viewCols() * CELL) + " " + (PAD * 2 + viewRows() * CELL));
+    var parts = [];
+    parts.push(
+      '<defs>' +
+      '<filter id="glow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>' +
+      '<filter id="beamglow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="4"/></filter>' +
+      '<pattern id="terrS" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="9" height="9" fill="rgba(55,230,255,.10)"/><line x1="0" y1="0" x2="0" y2="9" stroke="rgba(105,216,255,.30)" stroke-width="2.6"/></pattern>' +
+      '<pattern id="terrR" width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><rect width="9" height="9" fill="rgba(255,80,110,.10)"/><line x1="0" y1="0" x2="0" y2="9" stroke="rgba(255,92,118,.30)" stroke-width="2.6"/></pattern>' +
+      '</defs>');
+    // board plate
+    parts.push('<rect x="' + PAD + '" y="' + PAD + '" width="' + (viewCols() * CELL) + '" height="' + (viewRows() * CELL) + '" rx="8" fill="var(--board)" stroke="var(--edge)"/>');
+    // territory tints + grid
+    for (var x = 0; x < 10; x++) for (var y = 0; y < 8; y++) {
+      var t = KE.territory(x, y);
+      var fill = t === "silver" ? "url(#terrS)" : t === "red" ? "url(#terrR)" : "transparent";
+      var X = sX(x, y), Y = sY(x, y);
+      parts.push('<rect x="' + X + '" y="' + Y + '" width="' + CELL + '" height="' + CELL + '" fill="' + fill + '" stroke="var(--grid2)" stroke-width="1"/>');
+      if (t !== "blank") {
+        var mc = t === "silver" ? "var(--silver)" : "var(--red)";
+        parts.push('<rect x="' + (X + 1.5) + '" y="' + (Y + 1.5) + '" width="' + (CELL - 3) + '" height="' + (CELL - 3) + '" rx="3" fill="none" stroke="' + mc + '" stroke-width="1.2" opacity=".38"/>');
+        parts.push('<circle cx="' + (X + 7) + '" cy="' + (Y + 7) + '" r="2.4" fill="' + mc + '" opacity=".85"/>');
+      }
+    }
+    // coordinate labels: files a-j along the 10-cell axis, ranks 1-8 along the 8-cell axis
+    var files = "abcdefghij";
+    for (var x2 = 0; x2 < 10; x2++) {
+      if (PORT) parts.push('<text x="' + (PAD - 12) + '" y="' + (sY(x2, 0) + CELL / 2 + 4) + '" fill="var(--faint)" font-size="11" font-family="IBM Plex Mono, monospace" text-anchor="middle">' + files[x2] + '</text>');
+      else parts.push('<text x="' + (cx(x2) + CELL / 2) + '" y="' + (PAD - 10) + '" fill="var(--faint)" font-size="11" font-family="IBM Plex Mono, monospace" text-anchor="middle">' + files[x2] + '</text>');
+    }
+    for (var y2 = 0; y2 < 8; y2++) {
+      if (PORT) parts.push('<text x="' + (sX(0, y2) + CELL / 2) + '" y="' + (PAD - 10) + '" fill="var(--faint)" font-size="11" font-family="IBM Plex Mono, monospace" text-anchor="middle">' + (y2 + 1) + '</text>');
+      else parts.push('<text x="' + (PAD - 12) + '" y="' + (cy(y2) + CELL / 2 + 4) + '" fill="var(--faint)" font-size="11" font-family="IBM Plex Mono, monospace" text-anchor="middle">' + (y2 + 1) + '</text>');
+    }
+
+    // selection highlight
+    if (selected) {
+      parts.push('<rect x="' + (sX(selected.x, selected.y) + 2) + '" y="' + (sY(selected.x, selected.y) + 2) + '" width="' + (CELL - 4) + '" height="' + (CELL - 4) + '" rx="7" fill="rgba(120,220,255,.08)" stroke="var(--silver)" stroke-width="2"/>');
+    }
+    // pieces (orientations rotate with the view so mirrors stay physically true)
+    for (var k in state.board) {
+      var xy = k.split(","), px = +xy[0], py = +xy[1], p = state.board[k];
+      var vp = { color: p.color, type: p.type, orient: viewOrient(p.orient) };
+      var extra = (flashCell && flashCell.x === px && flashCell.y === py) ? ' class="flash"' : '';
+      parts.push('<g' + extra + '>' + glyph(px, py, vp) + '</g>');
+    }
+    // legal move dots for selected
+    if (selected) {
+      selMoves.forEach(function (m) {
+        if (m.t === "rotate") return;
+        var c = ctr(m.tx, m.ty);
+        if (m.t === "swap") parts.push('<circle cx="' + c[0] + '" cy="' + c[1] + '" r="14" fill="none" stroke="var(--gold)" stroke-width="2.4" stroke-dasharray="4 4"/>');
+        else parts.push('<circle cx="' + c[0] + '" cy="' + c[1] + '" r="7" fill="rgba(120,220,255,.55)"/>');
+      });
+    }
+    // beam
+    if (lastPath) {
+      var pts = beamPoints(lastPath.path), pstr = poly(pts), col = beamc(lastPath.color);
+      parts.push('<polyline points="' + pstr + '" fill="none" stroke="' + col + '" stroke-width="9" opacity=".28" stroke-linejoin="round" stroke-linecap="round" filter="url(#beamglow)"/>');
+      parts.push('<polyline class="beamcore" points="' + pstr + '" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" opacity=".95"/>');
+      parts.push('<polyline points="' + pstr + '" fill="none" stroke="' + col + '" stroke-width="4.2" stroke-linejoin="round" stroke-linecap="round" opacity=".8"/>');
+      var origin = pts[0];
+      parts.push('<circle cx="' + origin[0] + '" cy="' + origin[1] + '" r="5" fill="#fff"/>');
+    }
+    // hit-test layer (on top)
+    var dis = (busy || state.winner || state.turn !== humanColor) ? " disabled" : "";
+    for (var hx = 0; hx < 10; hx++) for (var hy = 0; hy < 8; hy++)
+      parts.push('<rect class="cellhit' + dis + '" data-x="' + hx + '" data-y="' + hy + '" x="' + sX(hx, hy) + '" y="' + sY(hx, hy) + '" width="' + CELL + '" height="' + CELL + '"/>');
+
+    // on-piece rotation buttons (above hit layer)
+    if (selected && !busy && !state.winner && state.turn === humanColor) {
+      var rots = selMoves.filter(function (m) { return m.t === "rotate"; });
+      if (rots.length) {
+        var p2 = KE.pieceAt(state, selected.x, selected.y);
+        var mob = isMobile();
+        var bx = sX(selected.x, selected.y), by = sY(selected.x, selected.y), R = mob ? 20 : 13, fs = mob ? 21 : 15;
+        var yBtn = by === PAD ? by + CELL + R + 3 : by - R - 3; // below on the top screen row, above otherwise
+        rots.forEach(function (m, i) {
+          var xBtn = rots.length === 1 ? bx + CELL / 2 : bx + (i === 0 ? CELL * 0.14 : CELL * 0.86);
+          xBtn = Math.max(PAD + R + 2, Math.min(PAD + viewCols() * CELL - R - 2, xBtn));
+          var label = p2.type === "sphinx" ? "⟳" : rotLabel(p2.orient, m.o);
+          parts.push('<g class="rotbtn" data-rot="' + m.o + '">' +
+            '<circle class="bg" cx="' + xBtn + '" cy="' + yBtn + '" r="' + R + '"/>' +
+            '<text x="' + xBtn + '" y="' + (yBtn + fs * 0.36) + '" style="font-size:' + fs + 'px">' + label + '</text></g>');
+        });
+      }
+    }
+
+    svg.innerHTML = parts.join("");
+    updateChrome();
+  }
+
+  function updateChrome() {
+    var t = state.turn;
+    el("turntext").textContent = (t === "silver" ? "Silver" : "Red") + " to move" + (t === humanColor ? " (you)" : "");
+    var dot = el("turnchip").querySelector(".dot");
+    dot.style.color = t === "silver" ? "var(--silver)" : "var(--red)";
+    el("lostS").textContent = lost.silver;
+    el("lostR").textContent = lost.red;
+    el("movecount").textContent = moveCount;
+    el("ratingval").textContent = rating;
+    var rd = el("ratingdelta");
+    if (scoredWinner && ratingDelta !== 0) {
+      rd.style.display = "inline";
+      rd.textContent = (ratingDelta > 0 ? "+" : "") + ratingDelta;
+      rd.style.color = ratingDelta > 0 ? "var(--silver)" : "var(--red)";
+    } else rd.style.display = "none";
+    el("scoreYou").textContent = score.you;
+    el("scoreAI").textContent = score.ai;
+    el("undo").disabled = busy || history.length === 0;
+    renderControls();
+  }
+
+  function renderControls() {
+    var strip = el("controlstrip");
+    if (state.winner || busy) {
+      strip.innerHTML = busy
+        ? '<span class="lbl" style="display:flex;align-items:center;gap:9px"><span class="spinner"></span>' + (state.turn === aiColor ? "You" : "Opponent") + ' resolving…</span>'
+        : '<span class="hint">Game over.</span>';
+      return;
+    }
+    if (state.turn !== humanColor) { strip.innerHTML = '<span class="lbl" style="display:flex;align-items:center;gap:9px"><span class="spinner"></span>Opponent is thinking…</span>'; return; }
+    if (!selected) { strip.innerHTML = '<span class="hint">Tap one of your pieces to see its legal moves.</span>'; return; }
+    var p = KE.pieceAt(state, selected.x, selected.y);
+    var name = p.type.charAt(0).toUpperCase() + p.type.slice(1);
+    var files = "abcdefghij";
+    var html = '<span class="lbl">' + name + ' @ ' + files[selected.x] + (selected.y + 1) + '</span>';
+    var moveCount = selMoves.filter(function (m) { return m.t !== "rotate"; }).length;
+    var hasRots = selMoves.some(function (m) { return m.t === "rotate"; });
+    var bits = [];
+    if (moveCount) bits.push("tap a highlighted square to move");
+    if (hasRots) bits.push("use the arrows on the piece to rotate");
+    html += '<span class="hint">' + (bits.join(", or ") || "no moves available") + '</span>';
+    html += '<button data-deselect="1" style="margin-left:auto">Cancel</button>';
+    strip.innerHTML = html;
+  }
+  function rotLabel(from, to) {
+    var cwv = { up: "right", right: "down", down: "left", left: "up" };
+    return cwv[from] === to ? "↻" : "↺";
+  }
+
+  /* ---- turn sequencing ---- */
+  async function doTurn(color, move) {
+    var myGen = gen;
+    if (color === humanColor) history.push({ state: KE.cloneState(state), lost: { silver: lost.silver, red: lost.red }, moves: moveCount });
+    moveCount++;
+    busy = true; selected = null; selMoves = []; lastPath = null; flashCell = null;
+    var ns = KE.applyMove(state, move);
+    var path = KE.laserPath(ns, color);
+    state = ns; render();                 // show the piece in its new spot
+    await sleep(130); if (gen !== myGen) return;
+    lastPath = { path: path, color: color }; render();  // fire beam
+    await sleep(540); if (gen !== myGen) return;
+    var res = KE.fireLaser(state, color);  // resolve hit (mutates state)
+    if (res.destroyed) { lost[res.destroyed.color]++; flashCell = { x: res.destroyed.x, y: res.destroyed.y }; }
+    state.turn = color === "silver" ? "red" : "silver";
+    render();
+    await sleep(res.destroyed ? 380 : 140); if (gen !== myGen) return;
+    flashCell = null; render();
+    busy = false;
+    if (state.winner) { showWin(); return; }
+    if (state.turn === aiColor) aiMove();
+    else render();
+  }
+  function aiMove() {
+    var myGen = gen;
+    busy = true; render();
+    setTimeout(function () {
+      if (gen !== myGen) return;
+      var opts = tier;
+      if (adaptive) {
+        var lv = ADAPT[adaptLevel];
+        opts = (lv.p && Math.random() < lv.p) ? WEAK : lv.full;
+      }
+      var mv = AI.pick(state, aiColor, opts);
+      if (gen !== myGen) return;
+      doTurn(aiColor, mv);
+    }, 120);
+  }
+
+  /* ---- input ---- */
+  function onHit(x, y) {
+    if (busy || state.winner || state.turn !== humanColor) return;
+    if (selected && selected.x === x && selected.y === y) { selected = null; selMoves = []; render(); return; }
+    if (selected) {
+      var dest = null;
+      for (var i = 0; i < selMoves.length; i++) { var m = selMoves[i]; if ((m.t === "move" || m.t === "swap") && m.tx === x && m.ty === y) { dest = m; break; } }
+      if (dest) { doTurn(humanColor, dest); return; }
+    }
+    var p = KE.pieceAt(state, x, y);
+    if (p && p.color === humanColor) { selected = { x: x, y: y }; selMoves = KE.movesForPiece(state, x, y); render(); return; }
+    selected = null; selMoves = []; render();
+  }
+
+  svg.addEventListener("click", function (e) {
+    var rb = e.target.closest(".rotbtn");
+    if (rb && selected && !busy && !state.winner && state.turn === humanColor) {
+      doTurn(humanColor, { t: "rotate", x: selected.x, y: selected.y, o: rb.getAttribute("data-rot") });
+      return;
+    }
+    var r = e.target.closest(".cellhit"); if (!r || r.classList.contains("disabled")) return;
+    onHit(+r.getAttribute("data-x"), +r.getAttribute("data-y"));
+  });
+  el("controlstrip").addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.hasAttribute("data-deselect")) { selected = null; selMoves = []; render(); }
+  });
+
+  /* ---- win overlay ---- */
+  function showWin() {
+    var w = state.winner;
+    clockPause();
+    if (!scoredWinner) {
+      scoredWinner = w;
+      if (w === humanColor) score.you++; else score.ai++;
+      // Elo update vs the opponent strength you actually faced
+      var opp = oppRating();
+      var expected = 1 / (1 + Math.pow(10, (opp - rating) / 400));
+      var s = w === humanColor ? 1 : 0;
+      ratingDelta = Math.round(ELO_K * (s - expected));
+      rating += ratingDelta;
+      if (adaptive) {
+        var before = adaptLevel;
+        adaptLevel = Math.max(1, Math.min(8, adaptLevel + (w === humanColor ? 1 : -1)));
+        adaptDelta = adaptLevel - before;
+        updateAdaptLabel();
+      }
+      saveProfile();
+    }
+    el("ovtitle").textContent = (w === "silver" ? "Silver" : "Red") + " wins";
+    el("ovtitle").style.color = w === "silver" ? "var(--silver)" : "var(--red)";
+    el("ovtext").textContent = (w === humanColor ? "Pharaoh down — that's the game. Nicely played." : "Your Pharaoh got lit up. Rematch?")
+      + "  Rating: " + rating + " (" + (ratingDelta >= 0 ? "+" : "") + ratingDelta + " vs " + oppRating() + ")";
+    el("overlay").classList.add("show");
+    updateChrome();
+  }
+
+  /* ---- controls: new game / side / difficulty ---- */
+  function newGame() {
+    gen++;
+    state = KE.newGame(); selected = null; selMoves = []; lastPath = null; flashCell = null; busy = false;
+    lost = { silver: 0, red: 0 }; history = []; scoredWinner = null;
+    moveCount = 0; clockBase = 0; clockSince = Date.now();
+    el("overlay").classList.remove("show");
+    render();
+    if (humanColor === "red") aiMove(); // silver (AI) moves first
+  }
+  function undo() {
+    if (busy || !history.length) return;
+    gen++;
+    var snap = history.pop();
+    state = snap.state; lost = snap.lost; moveCount = snap.moves;
+    clockResume(); // if we rewound out of a finished game, the clock runs again
+    if (scoredWinner) { // rewinding out of a finished game takes the point back off the board
+      if (scoredWinner === humanColor) score.you = Math.max(0, score.you - 1);
+      else score.ai = Math.max(0, score.ai - 1);
+      scoredWinner = null;
+      rating -= ratingDelta; ratingDelta = 0;
+      if (adaptive && adaptDelta) { adaptLevel -= adaptDelta; adaptDelta = 0; updateAdaptLabel(); }
+      saveProfile();
+    }
+    selected = null; selMoves = []; lastPath = null; flashCell = null;
+    el("overlay").classList.remove("show");
+    render();
+  }
+  function updateAdaptLabel() {
+    el("adaptbtn").innerHTML = adaptive ? "Adaptive&nbsp;·&nbsp;L" + adaptLevel : "Adaptive";
+  }
+  function clockMs() { return clockBase + (clockSince ? Date.now() - clockSince : 0); }
+  function clockPause() { if (clockSince) { clockBase += Date.now() - clockSince; clockSince = null; } }
+  function clockResume() { if (!clockSince) clockSince = Date.now(); }
+  function fmtClock(ms) {
+    var s = Math.floor(ms / 1000), m = Math.floor(s / 60); s %= 60;
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+  setInterval(function () { el("gametime").textContent = fmtClock(clockMs()); }, 500);
+  el("newgame").addEventListener("click", newGame);
+  el("undo").addEventListener("click", undo);
+  el("ovnew").addEventListener("click", newGame);
+  el("sideseg").addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    humanColor = b.getAttribute("data-side"); aiColor = humanColor === "silver" ? "red" : "silver";
+    [].forEach.call(this.children, function (c) { c.classList.toggle("on", c === b); });
+    newGame();
+  });
+  el("diffseg").addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    if (b.hasAttribute("data-adaptive")) { adaptive = true; }
+    else { adaptive = false; tierName = b.getAttribute("data-tier"); tier = TIERS[tierName]; }
+    updateAdaptLabel();
+    [].forEach.call(this.children, function (c) { c.classList.toggle("on", c === b); });
+  });
+
+  /* ---- legend mini-glyphs ---- */
+  (function () {
+    var g = el("legendgrid");
+    function mini(inner) { return '<svg viewBox="0 0 34 34">' + inner + '</svg>'; }
+    // small standalone versions
+    function tri() { return '<polygon points="6,6 28,6 28,28" fill="rgba(74,201,232,.15)" stroke="var(--silver)" stroke-width="1.4"/><line x1="6" y1="6" x2="28" y2="28" stroke="var(--silver-soft)" stroke-width="3" stroke-linecap="round"/>'; }
+    function scar() { return '<rect x="6" y="6" width="22" height="22" rx="6" fill="rgba(74,201,232,.15)" stroke="var(--silver)" stroke-width="1.4"/><line x1="6" y1="6" x2="28" y2="28" stroke="var(--silver-soft)" stroke-width="3.2" stroke-linecap="round"/>'; }
+    function anu() { return '<rect x="6" y="6" width="22" height="22" rx="6" fill="rgba(74,201,232,.15)" stroke="var(--silver)" stroke-width="1.2"/><rect x="6" y="6" width="22" height="5" rx="2" fill="var(--silver-soft)"/>'; }
+    function pha() { return '<circle cx="17" cy="17" r="11" fill="rgba(74,201,232,.15)" stroke="var(--silver)" stroke-width="1.6"/><circle cx="17" cy="17" r="6.5" fill="none" stroke="var(--gold)" stroke-width="1.2"/><circle cx="17" cy="17" r="2.6" fill="var(--gold)"/>'; }
+    function sph() { return '<rect x="6" y="6" width="22" height="22" rx="5" fill="rgba(74,201,232,.15)" stroke="var(--silver)" stroke-width="1.4"/><line x1="17" y1="17" x2="26" y2="17" stroke="var(--silver-soft)" stroke-width="5" stroke-linecap="round"/><circle cx="26" cy="17" r="3.5" fill="var(--beam-s)"/>'; }
+    var rows = [[tri(), "Pyramid"], [scar(), "Scarab"], [anu(), "Anubis"], [pha(), "Pharaoh"], [sph(), "Sphinx"]];
+    g.innerHTML = rows.map(function (r) { return mini(r[0]) + '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;color:var(--muted)">' + r[1] + '</span>'; }).join("");
+  })();
+
+  // beam draw-on animation
+  var styleEl = document.createElement("style");
+  styleEl.textContent = ".beamcore{stroke-dasharray:1400;stroke-dashoffset:1400;animation:draw .5s ease-out forwards}@keyframes draw{to{stroke-dashoffset:0}}.flash{animation:flash .5s ease-out}@keyframes flash{0%{opacity:1}30%{opacity:.15;filter:brightness(2.4)}100%{opacity:0}}";
+  document.head.appendChild(styleEl);
+
+  // test hook (no UI effect): lets automated tests read state and submit legal human moves
+  window.__khetDebug = {
+    state: function () { return state; },
+    busy: function () { return busy; },
+    play: function (m) { if (!busy && !state.winner && state.turn === humanColor) { doTurn(humanColor, m); return true; } return false; }
+  };
+
+  newGame();
+  loadProfile();
+
+  // Mobile: open on the board — header above the fold, legend/tallies below
+  if (isMobile()) {
+    setTimeout(function () {
+      try { el("gamestage").scrollIntoView({ block: "start" }); } catch (e) {}
+    }, 80);
+  }
+
+  // PWA: register the offline service worker only when actually served over http(s)
+  if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("./sw.js").catch(function () {});
+    });
+  }
+})();
+</script>
