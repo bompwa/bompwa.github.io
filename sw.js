@@ -1,5 +1,5 @@
 /* Laser Chess service worker — offline-first assets, network-first pages */
-var CACHE = "laser-chess-v35";
+var CACHE = "laser-chess-v38";
 var CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-512-maskable.png", "./apple-touch-icon.png"];
 
 self.addEventListener("install", function (e) {

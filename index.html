@@ -95,7 +95,13 @@
     font-family:"IBM Plex Mono",monospace;font-size:13px;padding:7px 9px;margin:6px 0 2px}
   .emsearch:focus{outline:none;border-color:#3f6f95}
   .segoff{opacity:.55;pointer-events:none}
-  @media (max-width:700px){ .boardrow{flex-direction:column} #movelogwrap{width:auto;max-height:118px} }
+  @media (max-width:700px){
+    .boardrow{flex-direction:column}
+    #movelogwrap{width:auto;max-height:118px}
+    #emojirow,#emojipicker{display:none !important} /* phones have emoji keyboards — reclaim the space for the input */
+    #chatwrap{max-height:150px}
+    #chatmsgs{min-height:40px}
+  }
   @media (min-width:1180px){
     .boardrow{position:relative}
     #movelogwrap{position:absolute;left:100%;top:0;bottom:0;margin-left:16px;width:190px}
@@ -221,7 +227,7 @@
   <header class="top">
     <div class="brand">
       <h1>Laser&nbsp;Chess</h1>
-      <span class="sub">mirrors · beams · one exposed pharaoh · v35</span>
+      <span class="sub">mirrors · beams · one exposed pharaoh · v38</span>
     </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
       <div class="turnchip" id="ratingchip" title="Your Elo rating — every AI level has its own rating; wins and losses move yours like chess.com">⚡&nbsp;<b id="ratingval" style="color:var(--gold)">800</b>&nbsp;<span id="ratingdelta" style="display:none"></span></div>
@@ -873,6 +879,7 @@ var AI = (function (KE, F, CORE) {
   var state, humanColor = "silver", aiColor = "red", tier = TIERS.casual, tierName = "casual";
   var selected = null, selMoves = [], lastPath = null, flashCell = null, busy = false;
   var animMove = null; // {t,x,y,tx,ty,prevOrient} — SMIL slide/sweep for the move being shown
+  var lastEcho = null; // exoskeleton of the last completed move — lingers until the next one
   var lost = { silver: 0, red: 0 };
   var history = []; // snapshots taken before each human move; undo = back to your last turn
   var score = { you: 0, ai: 0 }, scoredWinner = null; // session score; scoredWinner guards double-count + undo
@@ -1054,6 +1061,21 @@ var AI = (function (KE, F, CORE) {
       [[animMove.x, animMove.y]].concat(animMove.t === "rotate" ? [] : [[animMove.tx, animMove.ty]]).forEach(function (sq) {
         parts.push('<rect x="' + (sX(sq[0], sq[1]) + 2) + '" y="' + (sY(sq[0], sq[1]) + 2) + '" width="' + (CELL - 4) + '" height="' + (CELL - 4) + '" rx="7" fill="none" stroke="#fff" stroke-width="2" opacity="0"><animate attributeName="opacity" values="0.5;0" dur="0.6s" fill="freeze"/></rect>');
       });
+    }
+    // exoskeleton of the last completed move: wireframe at the origin + dashed path
+    if (lastEcho && !animMove) {
+      var eCol = lastEcho.c === "silver" ? "var(--silver)" : "var(--red)";
+      if (lastEcho.t !== "rotate") {
+        var e1 = ctr(lastEcho.x, lastEcho.y), e2 = ctr(lastEcho.tx, lastEcho.ty);
+        parts.push('<line x1="' + e1[0] + '" y1="' + e1[1] + '" x2="' + e2[0] + '" y2="' + e2[1] + '" stroke="' + eCol + '" stroke-width="1.6" stroke-dasharray="5 5" opacity="0.32"/>');
+        parts.push('<circle cx="' + e1[0] + '" cy="' + e1[1] + '" r="3" fill="' + eCol + '" opacity="0.32"/>');
+      }
+      var mvp = { color: lastEcho.c, type: lastEcho.mover.type, orient: viewOrient(lastEcho.mover.orient) };
+      parts.push('<g class="echo" opacity="0.2">' + glyph(lastEcho.x, lastEcho.y, mvp) + '</g>');
+      if (lastEcho.partner) {
+        var pvp = { color: lastEcho.partner.color, type: lastEcho.partner.type, orient: viewOrient(lastEcho.partner.orient) };
+        parts.push('<g class="echo" opacity="0.2">' + glyph(lastEcho.tx, lastEcho.ty, pvp) + '</g>');
+      }
     }
     // pieces (orientations rotate with the view so mirrors stay physically true)
     for (var k in state.board) {
@@ -1442,9 +1464,11 @@ var AI = (function (KE, F, CORE) {
     var myGen = gen;
     var moverP = KE.pieceAt(state, move.x, move.y);
     var moverSnap = moverP ? { type: moverP.type, orient: moverP.orient } : { type: "?", orient: "up" };
+    var partnerP = move.t === "swap" ? KE.pieceAt(state, move.tx, move.ty) : null;
+    var partnerSnap = partnerP ? { type: partnerP.type, orient: partnerP.orient, color: partnerP.color } : null;
     if (!netGame && (vsAI ? color === humanColor : true)) history.push({ state: KE.cloneState(state), lost: { silver: lost.silver, red: lost.red }, moves: moveCount, log: moveLog.length });
     moveCount++;
-    busy = true; selected = null; selMoves = []; lastPath = null; flashCell = null; animMove = null;
+    busy = true; selected = null; selMoves = []; lastPath = null; flashCell = null; animMove = null; lastEcho = null;
     var ns = KE.applyMove(state, move);
     var path = KE.laserPath(ns, color);
     animMove = { t: move.t, x: move.x, y: move.y, tx: move.tx, ty: move.ty, prevOrient: moverSnap.orient, c: color };
@@ -1458,6 +1482,7 @@ var AI = (function (KE, F, CORE) {
     var res = KE.fireLaser(state, color);  // resolve hit (mutates state)
     if (res.destroyed) { lost[res.destroyed.color]++; flashCell = { x: res.destroyed.x, y: res.destroyed.y }; Snd.kill(); }
     pushLog(color, moverSnap, move, res.destroyed, res.winner);
+    lastEcho = { t: move.t, x: move.x, y: move.y, tx: move.tx, ty: move.ty, c: color, mover: moverSnap, partner: partnerSnap };
     state.turn = color === "silver" ? "red" : "silver";
     render();
     await sleep(res.destroyed ? 380 : 140); if (gen !== myGen) return;
@@ -1582,7 +1607,7 @@ var AI = (function (KE, F, CORE) {
     el("chatwrap").style.display = "none";
     vsAI = withAI;
     gen++;
-    state = KE.newGame(currentSetup); selected = null; selMoves = []; lastPath = null; flashCell = null; animMove = null; busy = false;
+    state = KE.newGame(currentSetup); selected = null; selMoves = []; lastPath = null; flashCell = null; animMove = null; lastEcho = null; busy = false;
     lost = { silver: 0, red: 0 }; history = []; scoredWinner = null;
     moveCount = 0; moveLog = []; renderMoveLog(); winSounded = false; clockBase = 0; clockSince = Date.now();
     el("overlay").classList.remove("show");
@@ -1625,7 +1650,7 @@ var AI = (function (KE, F, CORE) {
       if (adaptive && adaptDelta) { adaptLevel -= adaptDelta; adaptDelta = 0; updateAdaptLabel(); }
       saveProfile();
     }
-    selected = null; selMoves = []; lastPath = null; flashCell = null; animMove = null;
+    selected = null; selMoves = []; lastPath = null; flashCell = null; animMove = null; lastEcho = null;
     el("overlay").classList.remove("show");
     render();
   }
@@ -1751,7 +1776,13 @@ var AI = (function (KE, F, CORE) {
           auth = firebase.auth(); db = firebase.database();
           return new Promise(function (res) { var un = auth.onAuthStateChanged(function (u) { un(); res(u); }); });
         })
-        .then(function (u) { if (u) return loadMe(u.uid); });
+        .then(function (u) {
+          if (!u) return null;
+          return loadMe(u.uid).then(function (m) {
+            if (m) { initPresence(); startMeSync(u.uid); }
+            return m;
+          });
+        });
       return ready;
     }
     function loadMe(uid) {
@@ -1928,6 +1959,7 @@ var AI = (function (KE, F, CORE) {
       el("modeoverlay").classList.remove("show");
       el("onlineoverlay").classList.add("show");
       el("autherr").textContent = ""; el("lobbyerr").textContent = "";
+      try { if (!el("f_email").value) el("f_email").value = localStorage.getItem("lc-email") || ""; } catch (err) {}
       pane("authpane");
       el("authsubmit").textContent = "…connecting";
       Net.ensure().then(function () {
@@ -2044,6 +2076,7 @@ var AI = (function (KE, F, CORE) {
       var p = finishing ? Net.completeProfile(name)
         : (signupMode ? Net.signUp(email, pass, name) : Net.logIn(email, pass));
       p.then(function (m) {
+        try { localStorage.setItem("lc-email", email); } catch (err) {}
         if (!m) { // authenticated but profile missing (e.g. an earlier signup was cut short) — finish setup
           finishing = true;
           el("f_email").style.display = "none"; el("f_pass").style.display = "none";
@@ -2085,7 +2118,7 @@ var AI = (function (KE, F, CORE) {
       if (netGame && netGame.unwatch) netGame.unwatch();
       vsAI = false;
       gen++;
-      state = KE.newGame(); selected = null; selMoves = []; lastPath = null; flashCell = null; animMove = null; busy = false;
+      state = KE.newGame(); selected = null; selMoves = []; lastPath = null; flashCell = null; animMove = null; lastEcho = null; busy = false;
       lost = { silver: 0, red: 0 }; history = []; scoredWinner = null;
       moveCount = 0; moveLog = []; renderMoveLog(); winSounded = false; clockBase = 0; clockSince = Date.now();
       el("overlay").classList.remove("show");
@@ -2140,10 +2173,13 @@ var AI = (function (KE, F, CORE) {
     function silentApply(mv) {
       var mp = KE.pieceAt(state, mv.x, mv.y);
       var snapM = mp ? { type: mp.type, orient: mp.orient } : { type: "?", orient: "up" };
+      var mp2 = mv.t === "swap" ? KE.pieceAt(state, mv.tx, mv.ty) : null;
       var r = KE.applyTurn(state, mv, mv.c);
       state = r.state;
       if (r.destroyed) lost[r.destroyed.color]++;
       pushLog(mv.c, snapM, mv, r.destroyed, r.winner);
+      var partS = mv.t === "swap" && mp2 ? { type: mp2.type, orient: mp2.orient, color: mp2.color } : null;
+      lastEcho = { t: mv.t, x: mv.x, y: mv.y, tx: mv.tx, ty: mv.ty, c: mv.c, mover: snapM, partner: partS };
       moveCount++; netGame.applied++;
     }
     function cCount(m) { var n = 0; while (m[n] != null) n++; return n; }
@@ -2155,7 +2191,7 @@ var AI = (function (KE, F, CORE) {
     }
     function rollbackTo(n) { // both sides run this when the shared move log shrinks
       gen++; // aborts any in-flight animation safely
-      busy = false; selected = null; selMoves = []; lastPath = null; flashCell = null; animMove = null;
+      busy = false; selected = null; selMoves = []; lastPath = null; flashCell = null; animMove = null; lastEcho = null;
       netGame.pumping = false; netGame.applied = 0; netGame.settled = false;
       state = KE.newGame(netGame.setup || "ace"); state.turn = netGame.first || "silver";
       lost = { silver: 0, red: 0 }; moveCount = 0; moveLog = [];
@@ -2293,6 +2329,7 @@ var AI = (function (KE, F, CORE) {
   });
   newGame(); // opens the mode picker
   loadProfile();
+  Net.ensure().then(function () { updateChrome(); }).catch(function () {}); // restore any saved session at boot
 
   // Mobile: open on the board — header above the fold, legend/tallies below
   if (isMobile()) {
