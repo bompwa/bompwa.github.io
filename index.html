@@ -74,11 +74,11 @@
   .mv.s{color:var(--silver-soft)} .mv.r{color:var(--red-soft)}
   .mv .cap{color:var(--gold);margin-left:auto;font-size:11px;white-space:nowrap}
   .movelog .hintempty{color:var(--faint);font-size:11px;padding:4px}
-  .prow{display:grid;grid-template-columns:1fr auto auto 16px;gap:8px;align-items:center;padding:0 8px;height:30px;border-radius:8px;
+  .prow{display:grid;grid-template-columns:1fr auto auto 18px 46px;gap:8px;align-items:center;padding:0 8px;height:32px;border-radius:8px;
     font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--ink);text-align:left}
-  .prow.phead{color:var(--faint);font-size:10px;letter-spacing:.12em;padding:2px 8px}
-  .prow.invitable{cursor:pointer}
-  .prow.invitable:hover{background:#1a2740}
+  .prow.phead{color:var(--muted);font-size:13px;font-weight:600;letter-spacing:.06em;padding:2px 8px;height:34px}
+  .prow.phead [data-sort]{user-select:none}
+  .pinv{padding:3px 8px;font-size:13px;border-radius:8px}
   .prow .sub2{color:var(--muted)}
   .pdot{width:9px;height:9px;border-radius:50%;justify-self:center;box-shadow:0 0 8px currentColor}
   .laycard{border:1px solid var(--edge);border-radius:10px;background:#0c1524;padding:8px 6px;cursor:pointer;text-align:center}
@@ -119,7 +119,7 @@
   .emojirow button{padding:4px 7px;font-size:16px;border-radius:8px;border-color:transparent;background:transparent}
   .emojirow button:hover{background:#1a2740}
   @media (min-width:1270px){
-    #chatwrap{position:absolute;right:100%;top:0;bottom:0;margin-right:16px;width:190px;max-height:none;order:0;flex-basis:auto;margin-top:0}
+    #chatwrap{position:absolute;right:100%;top:0;bottom:0;margin-right:16px;width:calc((100vw - 100%)/2 - 34px);min-width:190px;max-height:none;order:0;flex-basis:auto;margin-top:0}
   }
   .rotbtn{cursor:pointer}
   .rotbtn .pad{fill:transparent}
@@ -178,6 +178,11 @@
   .overlay{position:absolute;inset:0;border-radius:16px;display:none;align-items:center;justify-content:center;
     background:rgba(6,9,15,.82);backdrop-filter:blur(3px);z-index:5;text-align:center;padding:20px}
   .overlay.show{display:flex}
+  /* full-screen sheets: lobby, mode picker, board picker — never collide with the page beneath */
+  #onlineoverlay,#modeoverlay,#layoutoverlay{position:fixed;inset:0;z-index:60;background:rgba(5,8,14,.95);
+    overflow-y:auto;-webkit-overflow-scrolling:touch;align-items:flex-start;justify-content:center;padding:14px 12px 40px}
+  #onlineoverlay .card,#modeoverlay .card,#layoutoverlay .card{background:#0c1422;border:1px solid var(--edge);
+    border-radius:16px;padding:18px 16px;margin:14px auto;box-shadow:0 12px 44px rgba(0,0,0,.55);width:100%}
   #overlay{background:rgba(6,9,15,.36);backdrop-filter:none;align-items:flex-end;padding-bottom:24px}
   #overlay .card{background:rgba(10,15,26,.82);border:1px solid var(--edge);border-radius:14px;padding:16px 20px;max-width:340px}
 
@@ -213,7 +218,7 @@
   <header class="top">
     <div class="brand">
       <h1>Laser&nbsp;Chess</h1>
-      <span class="sub">mirrors · beams · one exposed pharaoh · v28</span>
+      <span class="sub">mirrors · beams · one exposed pharaoh · v33</span>
     </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
       <div class="turnchip" id="ratingchip" title="Your Elo rating — every AI level has its own rating; wins and losses move yours like chess.com">⚡&nbsp;<b id="ratingval" style="color:var(--gold)">800</b>&nbsp;<span id="ratingdelta" style="display:none"></span></div>
@@ -225,7 +230,7 @@
   <div class="toolbar">
     <button class="primary" id="newgame">↻ New game</button>
     <button id="undo" disabled>↶ Undo</button>
-    <button id="lobbybtn" title="Back to the player dashboard — the game stays resumable" style="display:none">👥 Players</button>
+    <button id="lobbybtn" title="Back to the player dashboard — the game stays resumable" style="display:none">☰ Menu</button>
     <button id="resign" title="Resign the online game" style="display:none">🏳 Resign</button>
     <button id="sndbtn" title="Sound effects">🔊</button>
     <button id="musbtn" title="Ambient music" style="opacity:.55">🎵</button>
@@ -287,7 +292,8 @@
         </div>
         <div style="text-align:left;margin-bottom:10px">
           <span class="hint" style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.2em;color:var(--faint)">PLAYERS — tap a green player to invite</span>
-          <div id="roster" style="max-height:176px;overflow-y:auto;margin-top:6px"><span class="hint">loading…</span></div>
+          <input class="ov-input" id="psearch" placeholder="🔎 find a player" style="margin:6px 0 2px;padding:9px 10px;font-size:13px">
+          <div id="roster" style="max-height:186px;overflow-y:auto;margin-top:4px"><span class="hint">loading…</span></div>
         </div>
         <div style="text-align:left"><span class="hint" style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.2em;color:var(--faint)">BOARD</span></div>
         <div class="laymini" id="lobbylayouts"></div>
@@ -965,22 +971,27 @@ var AI = (function (KE, F, CORE) {
   }
 
   /* ---- full render ---- */
+  function slideWrap(inner, dx, dy) { // main slide + two lagging afterimages
+    var ease = ' calcMode="spline" keySplines="0.2 0.8 0.2 1" keyTimes="0;1"';
+    function tr(dur) { return '<animateTransform attributeName="transform" type="translate" from="' + dx + ' ' + dy + '" to="0 0" dur="' + dur + 's"' + ease + ' fill="freeze"/>'; }
+    return '<g opacity="0.16">' + '<animate attributeName="opacity" values="0.16;0" dur="0.7s" fill="freeze"/>' + tr(0.62) + inner + '</g>' +
+           '<g opacity="0.32">' + '<animate attributeName="opacity" values="0.32;0" dur="0.58s" fill="freeze"/>' + tr(0.48) + inner + '</g>' +
+           '<g>' + tr(0.34) + inner + '</g>';
+  }
   function animWrap(px, py, p, inner) {
     if (!animMove) return inner;
     var a = animMove, ease = ' calcMode="spline" keySplines="0.2 0.8 0.2 1" keyTimes="0;1"';
     if (a.t === "rotate" && px === a.x && py === a.y) {
       var c = ctr(px, py);
       var from = (VCW[a.prevOrient] === p.orient) ? -90 : 90; // sweep in from the previous facing
-      return '<g><animateTransform attributeName="transform" type="rotate" from="' + from + ' ' + c[0] + ' ' + c[1] + '" to="0 ' + c[0] + ' ' + c[1] + '" dur="0.34s"' + ease + ' fill="freeze"/>' + inner + '</g>';
+      function rot(dur) { return '<animateTransform attributeName="transform" type="rotate" from="' + from + ' ' + c[0] + ' ' + c[1] + '" to="0 ' + c[0] + ' ' + c[1] + '" dur="' + dur + 's"' + ease + ' fill="freeze"/>'; }
+      return '<g opacity="0.3"><animate attributeName="opacity" values="0.3;0" dur="0.6s" fill="freeze"/>' + rot(0.5) + inner + '</g>' +
+             '<g>' + rot(0.34) + inner + '</g>';
     }
-    if ((a.t === "move" || a.t === "swap") && px === a.tx && py === a.ty) {
-      var dx = sX(a.x, a.y) - sX(a.tx, a.ty), dy = sY(a.x, a.y) - sY(a.tx, a.ty);
-      return '<g><animateTransform attributeName="transform" type="translate" from="' + dx + ' ' + dy + '" to="0 0" dur="0.34s"' + ease + ' fill="freeze"/>' + inner + '</g>';
-    }
-    if (a.t === "swap" && px === a.x && py === a.y) {
-      var dx2 = sX(a.tx, a.ty) - sX(a.x, a.y), dy2 = sY(a.tx, a.ty) - sY(a.x, a.y);
-      return '<g><animateTransform attributeName="transform" type="translate" from="' + dx2 + ' ' + dy2 + '" to="0 0" dur="0.34s"' + ease + ' fill="freeze"/>' + inner + '</g>';
-    }
+    if ((a.t === "move" || a.t === "swap") && px === a.tx && py === a.ty)
+      return slideWrap(inner, sX(a.x, a.y) - sX(a.tx, a.ty), sY(a.x, a.y) - sY(a.tx, a.ty));
+    if (a.t === "swap" && px === a.x && py === a.y)
+      return slideWrap(inner, sX(a.tx, a.ty) - sX(a.x, a.y), sY(a.tx, a.ty) - sY(a.x, a.y));
     return inner;
   }
   function render() {
@@ -1030,6 +1041,13 @@ var AI = (function (KE, F, CORE) {
     }
     // move-in-progress: pulse the involved squares so watchers catch the action
     if (animMove) {
+      if (animMove.t !== "rotate") { // glowing whoosh along the path
+        var c1 = ctr(animMove.x, animMove.y), c2 = ctr(animMove.tx, animMove.ty);
+        var scol = animMove.c === "silver" ? "var(--silver)" : "var(--red)";
+        parts.push('<line x1="' + c1[0] + '" y1="' + c1[1] + '" x2="' + c2[0] + '" y2="' + c2[1] + '" stroke="' + scol + '" stroke-linecap="round" filter="url(#glow)" opacity="0">' +
+          '<animate attributeName="opacity" values="0;0.4;0" keyTimes="0;0.25;1" dur="0.5s" fill="freeze"/>' +
+          '<animate attributeName="stroke-width" values="12;1.5" dur="0.5s" fill="freeze"/></line>');
+      }
       [[animMove.x, animMove.y]].concat(animMove.t === "rotate" ? [] : [[animMove.tx, animMove.ty]]).forEach(function (sq) {
         parts.push('<rect x="' + (sX(sq[0], sq[1]) + 2) + '" y="' + (sY(sq[0], sq[1]) + 2) + '" width="' + (CELL - 4) + '" height="' + (CELL - 4) + '" rx="7" fill="none" stroke="#fff" stroke-width="2" opacity="0"><animate attributeName="opacity" values="0.5;0" dur="0.6s" fill="freeze"/></rect>');
       });
@@ -1426,7 +1444,7 @@ var AI = (function (KE, F, CORE) {
     busy = true; selected = null; selMoves = []; lastPath = null; flashCell = null; animMove = null;
     var ns = KE.applyMove(state, move);
     var path = KE.laserPath(ns, color);
-    animMove = { t: move.t, x: move.x, y: move.y, tx: move.tx, ty: move.ty, prevOrient: moverSnap.orient };
+    animMove = { t: move.t, x: move.x, y: move.y, tx: move.tx, ty: move.ty, prevOrient: moverSnap.orient, c: color };
     state = ns; render();                 // piece slides / sweeps into its new position
     Snd.move();
     await sleep(430); if (gen !== myGen) return;
@@ -1574,7 +1592,7 @@ var AI = (function (KE, F, CORE) {
   function showLayoutPicker(mode) {
     pendingMode = mode;
     el("modeoverlay").classList.remove("show");
-    renderLayoutCards("layoutgrid", 9, currentSetup);
+    renderLayoutCards("layoutgrid", 13, currentSetup);
     el("layoutoverlay").classList.add("show");
   }
   el("modeai").addEventListener("click", function () { showLayoutPicker("ai"); });
@@ -1922,26 +1940,38 @@ var AI = (function (KE, F, CORE) {
       el("duelbanner").style.display = "none"; incomingDuel = null;
     }
     function statusRank(st) { return st === "lobby" ? 0 : st === "ingame" ? 1 : 2; }
-    var rosterSort = "status", lastRoster = null;
+    var rosterSort = "status", rosterFilter = "", lastRoster = null;
+    function sortArrow(key) {
+      return rosterSort === key ? ' <span style="color:var(--gold)">▼</span>' : ' <span style="color:var(--faint)">⇅</span>';
+    }
     function renderRoster(users, status) {
       lastRoster = { users: users, status: status };
       var meU = Net.whoami(); if (!meU) return;
       var rows = Object.keys(users).map(function (uid) {
         var u = users[uid] || {}, st = (status[uid] && status[uid].state) || "offline";
         return { uid: uid, name: u.name || "?", w: u.wins || 0, l: u.losses || 0, r: u.rating || 800, st: st };
-      }).sort(rosterSort === "elo"
-        ? function (a, b) { return b.r - a.r || statusRank(a.st) - statusRank(b.st); }
+      });
+      if (rosterFilter) rows = rows.filter(function (p) { return p.name.toLowerCase().indexOf(rosterFilter) >= 0; });
+      rows.sort(rosterSort === "elo" ? function (a, b) { return b.r - a.r || statusRank(a.st) - statusRank(b.st); }
+        : rosterSort === "name" ? function (a, b) { return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1; }
         : function (a, b) { return statusRank(a.st) - statusRank(b.st) || b.r - a.r; });
       var dot = { lobby: "#43d17a", ingame: "var(--gold)", offline: "#7a3644" };
-      var html = '<div class="prow phead"><span>PLAYER</span><span>W–L</span><span data-sort="elo"' + (rosterSort === "elo" ? ' class="on"' : '') + ' title="Sort by rating">⚡</span><span data-sort="status"' + (rosterSort === "status" ? ' class="on"' : '') + ' title="Sort by status">●</span></div>';
+      var html = '<div class="prow phead">' +
+        '<span data-sort="name"' + (rosterSort === "name" ? ' class="on"' : '') + ' title="Sort by name">PLAYER' + sortArrow("name") + '</span>' +
+        '<span>W–L</span>' +
+        '<span data-sort="elo"' + (rosterSort === "elo" ? ' class="on"' : '') + ' title="Sort by rating">⚡' + sortArrow("elo") + '</span>' +
+        '<span data-sort="status"' + (rosterSort === "status" ? ' class="on"' : '') + ' title="Sort by status">●' + sortArrow("status") + '</span><span></span></div>';
       html += rows.map(function (p) {
         var self = p.uid === meU.uid;
         var invitable = !self && p.st === "lobby";
-        return '<div class="prow' + (invitable ? " invitable" : "") + '" data-uid="' + p.uid + '" data-name="' + escHtml(p.name) + '">' +
+        return '<div class="prow">' +
           '<span>' + escHtml(p.name) + (self ? ' <span class="sub2">(you)</span>' : '') + '</span>' +
           '<span class="sub2">' + p.w + '–' + p.l + '</span><span>' + p.r + '</span>' +
-          '<span class="pdot" style="color:' + dot[p.st] + ';background:' + dot[p.st] + '"></span></div>';
+          '<span class="pdot" style="color:' + dot[p.st] + ';background:' + dot[p.st] + '"></span>' +
+          (invitable ? '<button class="pinv primary" data-uid="' + p.uid + '" data-name="' + escHtml(p.name) + '" title="Invite to play">⚔️</button>' : '<span></span>') +
+          '</div>';
       }).join("");
+      if (!rows.length) html += '<span class="hint">No players match.</span>';
       el("roster").innerHTML = html;
     }
     function onDuel(d) {
@@ -1981,7 +2011,7 @@ var AI = (function (KE, F, CORE) {
       var me = Net.whoami();
       Net.presence("lobby");
       leaveLobbySubs();
-      renderLayoutCards("lobbylayouts", 6, currentSetup);
+      renderLayoutCards("lobbylayouts", 8, currentSetup);
       rosterUnsub = Net.watchRoster(renderRoster);
       duelUnsub = Net.watchDuel(me.uid, onDuel);
       el("lobbywho").textContent = me.name + " · ⚡" + (me.rating || 800) + " · " + (me.wins || 0) + "W " + (me.losses || 0) + "L";
@@ -2172,13 +2202,17 @@ var AI = (function (KE, F, CORE) {
       var card = e.target.closest(".laycard"); if (!card) return;
       currentSetup = card.getAttribute("data-setup");
       saveProfile();
-      renderLayoutCards("lobbylayouts", 6, currentSetup);
+      renderLayoutCards("lobbylayouts", 8, currentSetup);
     });
     el("roster").addEventListener("click", function (e) {
       var srt = e.target.closest("[data-sort]");
       if (srt) { rosterSort = srt.getAttribute("data-sort"); if (lastRoster) renderRoster(lastRoster.users, lastRoster.status); return; }
-      var row = e.target.closest(".prow.invitable"); if (!row) return;
-      invitePlayer(row.getAttribute("data-uid"), row.getAttribute("data-name"));
+      var inv = e.target.closest(".pinv"); if (!inv) return;
+      invitePlayer(inv.getAttribute("data-uid"), inv.getAttribute("data-name"));
+    });
+    el("psearch").addEventListener("input", function () {
+      rosterFilter = this.value.trim().toLowerCase();
+      if (lastRoster) renderRoster(lastRoster.users, lastRoster.status);
     });
     el("duelaccept").addEventListener("click", function () {
       if (!incomingDuel) return;
