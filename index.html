@@ -80,6 +80,23 @@
     .boardrow{position:relative}
     #movelogwrap{position:absolute;left:100%;top:0;bottom:0;margin-left:16px;width:190px}
   }
+  .boardrow{flex-wrap:wrap}
+  #chatwrap{display:none;flex-direction:column;order:3;flex-basis:100%;max-height:190px;margin-top:10px;
+    border:1px solid var(--edge);border-radius:12px;background:var(--panel);overflow:hidden}
+  #chatmsgs{flex:1;min-height:60px;overflow-y:auto;padding:4px 10px;font-family:"IBM Plex Mono",monospace;font-size:12.5px;line-height:1.5}
+  .cmsg{padding:2px 0;word-break:break-word}
+  .cmsg b{font-weight:600;margin-right:6px}
+  .cmsg.s b{color:var(--silver)} .cmsg.r b{color:var(--red)}
+  .chatrow{display:flex;gap:6px;padding:8px;border-top:1px solid var(--grid)}
+  #chatinput{flex:1;min-width:0;background:#0c1524;border:1px solid var(--edge);border-radius:9px;color:var(--ink);
+    font-family:"IBM Plex Mono",monospace;font-size:14px;padding:9px 10px}
+  #chatinput:focus{outline:none;border-color:#3f6f95}
+  .emojirow{display:flex;gap:2px;padding:0 8px 6px;flex-wrap:wrap}
+  .emojirow button{padding:4px 7px;font-size:16px;border-radius:8px;border-color:transparent;background:transparent}
+  .emojirow button:hover{background:#1a2740}
+  @media (min-width:1270px){
+    #chatwrap{position:absolute;right:100%;top:0;bottom:0;margin-right:16px;width:190px;max-height:none;order:0;flex-basis:auto;margin-top:0}
+  }
   .rotbtn{cursor:pointer}
   .rotbtn .pad{fill:transparent}
   .rotbtn .bg{fill:#0f1b2e;stroke:var(--edge);stroke-width:1.5}
@@ -137,6 +154,9 @@
   .overlay{position:absolute;inset:0;border-radius:16px;display:none;align-items:center;justify-content:center;
     background:rgba(6,9,15,.82);backdrop-filter:blur(3px);z-index:5;text-align:center;padding:20px}
   .overlay.show{display:flex}
+  #overlay{background:rgba(6,9,15,.36);backdrop-filter:none;align-items:flex-end;padding-bottom:24px}
+  #overlay .card{background:rgba(10,15,26,.82);border:1px solid var(--edge);border-radius:14px;padding:16px 20px;max-width:340px}
+
   .overlay .card{max-width:340px}
   .overlay h2{font-size:30px;letter-spacing:.1em;margin:0 0 8px;text-transform:uppercase}
   .overlay p{color:var(--muted);margin:0 0 18px;font-family:"IBM Plex Mono",monospace;font-size:13px}
@@ -169,7 +189,7 @@
   <header class="top">
     <div class="brand">
       <h1>Laser&nbsp;Chess</h1>
-      <span class="sub">mirrors · beams · one exposed pharaoh · v17</span>
+      <span class="sub">mirrors · beams · one exposed pharaoh · v19</span>
     </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
       <div class="turnchip" id="ratingchip" title="Your Elo rating — every AI level has its own rating; wins and losses move yours like chess.com">⚡&nbsp;<b id="ratingval" style="color:var(--gold)">800</b>&nbsp;<span id="ratingdelta" style="display:none"></span></div>
@@ -199,6 +219,15 @@
 
   <div class="gamestage" id="gamestage">
   <div class="boardrow">
+  <aside id="chatwrap">
+    <div class="mlhead">CHAT</div>
+    <div id="chatmsgs"></div>
+    <div class="emojirow" id="emojirow"></div>
+    <div class="chatrow">
+      <input id="chatinput" maxlength="200" placeholder="message…">
+      <button id="chatsend" class="primary" style="padding:0 14px">➤</button>
+    </div>
+  </aside>
   <div class="boardwrap">
     <svg class="board" id="svg" viewBox="0 0 640 524" aria-label="Laser Chess board"></svg>
     <div class="overlay show" id="modeoverlay"><div class="card">
@@ -236,6 +265,12 @@
         <p style="color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:12px">Your friend taps Play online → enters the code.<br>Game starts the moment they join.</p>
         <button id="waitcancel" style="width:100%;margin-top:8px">Cancel</button>
       </div>
+    </div></div>
+    <div class="overlay" id="undooverlay"><div class="card" style="max-width:300px">
+      <h2 style="font-size:22px;letter-spacing:.05em">Takeback?</h2>
+      <p><span id="undoname">Opponent</span> asks to take back their move.</p>
+      <button class="primary" id="undogrant" style="width:100%;padding:13px">Grant</button>
+      <button id="undodeny" style="width:100%;margin-top:8px">Deny</button>
     </div></div>
     <div class="overlay" id="overlay"><div class="card">
       <h2 id="ovtitle">Silver wins</h2>
@@ -1072,6 +1107,7 @@ var AI = (function (KE, F, CORE) {
       kill: function () { if (sfxOn) { noise(0.35, 0.45, 2500, 120); tone("sine", 90, 45, 0.32, 0.45); } },
       win: function () { if (sfxOn) [523, 659, 784, 1047].forEach(function (f, i) { tone("triangle", f, null, 0.17, 0.2, i * 0.11); }); },
       lose: function () { if (sfxOn) { tone("sawtooth", 330, 290, 0.25, 0.14, 0); tone("sawtooth", 262, 190, 0.5, 0.16, 0.26); } },
+      blip: function () { if (sfxOn) tone("triangle", 660, 880, 0.08, 0.12); },
       setSfx: function (on) { sfxOn = on; },
       setMusic: function (on) { musicOn = on; if (on) { ac(); if (!musicTimer) pad(); } else if (musicTimer) { clearTimeout(musicTimer); musicTimer = null; } },
       sfx: function () { return sfxOn; }, music: function () { return musicOn; }
@@ -1088,6 +1124,40 @@ var AI = (function (KE, F, CORE) {
     this.style.opacity = Snd.music() ? "1" : ".55";
     saveProfile();
   });
+  function escHtml(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  var chatCount = 0;
+  function renderChat() {
+    var box = el("chatmsgs");
+    if (!netGame) { box.innerHTML = ""; chatCount = 0; return; }
+    var msgs = [];
+    for (var k in (netGame.chat || {})) msgs.push(netGame.chat[k]);
+    msgs.sort(function (a, b) { return (a.at || 0) - (b.at || 0); });
+    var meU = Net.whoami();
+    box.innerHTML = msgs.map(function (m) {
+      var cls = (netGame.raw && netGame.raw.players && netGame.raw.players.silver === m.by) ? "s" : "r";
+      return '<div class="cmsg ' + cls + '"><b>' + escHtml(m.name || "?") + '</b>' + escHtml(m.txt || "") + '</div>';
+    }).join("");
+    box.scrollTop = box.scrollHeight;
+    if (msgs.length > chatCount && msgs.length && meU && msgs[msgs.length - 1].by !== meU.uid && chatCount > 0) Snd.blip();
+    chatCount = msgs.length;
+  }
+  function sendChatMsg() {
+    var inp = el("chatinput"), txt = inp.value.trim();
+    if (!txt || !netGame) return;
+    inp.value = "";
+    Net.sendChat(netGame.gid, txt.slice(0, 200)).catch(function () {});
+  }
+  el("chatsend").addEventListener("click", sendChatMsg);
+  el("chatinput").addEventListener("keydown", function (e) { if (e.key === "Enter") sendChatMsg(); });
+  (function () {
+    var EM = ["😂", "🔥", "💀", "🫡", "😤", "🤯", "👏", "🍀", "❤️", "🤝"];
+    el("emojirow").innerHTML = EM.map(function (e) { return "<button data-em='" + e + "'>" + e + "</button>"; }).join("");
+    el("emojirow").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-em]"); if (!b) return;
+      el("chatinput").value += b.getAttribute("data-em");
+      el("chatinput").focus();
+    });
+  })();
   function renderScore() {
     var L = el("scoreL"), R = el("scoreR"), V1 = el("scoreYou"), V2 = el("scoreAI"), chip = el("scorechip");
     if (netGame) { // all-time wins for both players in this match
@@ -1129,6 +1199,11 @@ var AI = (function (KE, F, CORE) {
       rd.style.color = ratingDelta > 0 ? "var(--silver)" : "var(--red)";
     } else rd.style.display = "none";
     el("undo").disabled = netGame ? !Online.canRequestUndo() : (busy || history.length === 0);
+    var meU0 = (typeof Net !== "undefined" && Net && Net.whoami) ? Net.whoami() : null;
+    var req0 = netGame && netGame.undoReq;
+    var showPrompt = !!(req0 && meU0 && req0.by !== meU0.uid && !state.winner);
+    el("undooverlay").classList.toggle("show", showPrompt);
+    if (showPrompt) el("undoname").textContent = netGame.names[req0.color] || "Opponent";
     var seg = el("sideseg");
     var showColor = netGame ? netGame.myColor : humanColor;
     seg.classList.toggle("segoff", !!netGame);
@@ -1146,13 +1221,10 @@ var AI = (function (KE, F, CORE) {
     }
     if (netGame && netGame.undoReq) {
       var req = netGame.undoReq, meU = Net.whoami();
-      if (meU && req.by !== meU.uid) {
-        strip.innerHTML = '<span class="lbl">' + (netGame.names[req.color] || "Opponent") + ' asks to take back their move</span>' +
-          '<button class="primary" data-grant="1">Grant</button><button data-deny="1">Deny</button>';
+      if (meU && req.by === meU.uid) {
+        strip.innerHTML = '<span class="lbl" style="display:flex;align-items:center;gap:9px"><span class="spinner"></span>Takeback requested — waiting for ' + (netGame.names[req.color === "silver" ? "red" : "silver"] || "opponent") + '…</span>';
         return;
-      }
-      strip.innerHTML = '<span class="lbl" style="display:flex;align-items:center;gap:9px"><span class="spinner"></span>Takeback requested — waiting for ' + (netGame.names[req.color === "silver" ? "red" : "silver"] || "opponent") + '…</span>';
-      return;
+      } // responder decides in the popup; their strip stays normal underneath
     }
     if (netGame && netGame.undoResp && Net.whoami() && netGame.undoResp.to === Net.whoami().uid) {
       strip.innerHTML = '<span class="lbl" style="color:var(--red-soft)">Takeback denied.</span>';
@@ -1320,6 +1392,7 @@ var AI = (function (KE, F, CORE) {
   }
   function startGame(withAI) {
     if (netGame) { if (netGame.unwatch) netGame.unwatch(); netGame = null; }
+    el("chatwrap").style.display = "none";
     vsAI = withAI;
     gen++;
     state = KE.newGame(); selected = null; selMoves = []; lastPath = null; flashCell = null; animMove = null; busy = false;
@@ -1366,6 +1439,8 @@ var AI = (function (KE, F, CORE) {
   setInterval(function () { if (state) el("gametime").textContent = fmtClock(clockMs()); }, 500);
   el("newgame").addEventListener("click", newGame);
   el("undo").addEventListener("click", undo);
+  el("undogrant").addEventListener("click", function () { Online.respond(true); });
+  el("undodeny").addEventListener("click", function () { Online.respond(false); });
   el("ovrematch").addEventListener("click", function () {
     if (netGame) { Online.rematch(); return; }
     startGame(vsAI); // local: instant same-mode rematch
@@ -1533,6 +1608,10 @@ var AI = (function (KE, F, CORE) {
       return db.ref("games/" + gid).update({ undoReq: null, undoResp: { to: req.by, result: "denied", at: Date.now() } });
     }
     function clearUndoResp(gid) { return db.ref("games/" + gid + "/undoResp").remove(); }
+    function sendChat(gid, txt) {
+      var key = "c" + Date.now() + "_" + Math.floor(Math.random() * 1e4);
+      return db.ref("games/" + gid + "/chat/" + key).set({ by: me.uid, name: me.name, txt: txt, at: Date.now() });
+    }
     function createRematch(oldGid, old) {
       var newGid = "g" + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
       return db.ref("games/" + oldGid + "/rematch").transaction(function (cur) { return cur == null ? { gid: newGid, by: me.uid } : undefined; })
@@ -1553,7 +1632,7 @@ var AI = (function (KE, F, CORE) {
           });
         });
     }
-    return { ensure: ensure, signUp: signUp, logIn: logIn, requestUndo: requestUndo, createRematch: createRematch, respondUndo: respondUndo, clearUndoResp: clearUndoResp, completeProfile: completeProfile, createGame: createGame, joinByCode: joinByCode,
+    return { ensure: ensure, signUp: signUp, logIn: logIn, requestUndo: requestUndo, createRematch: createRematch, respondUndo: respondUndo, clearUndoResp: clearUndoResp, sendChat: sendChat, completeProfile: completeProfile, createGame: createGame, joinByCode: joinByCode,
       watchGame: watchGame, sendMove: sendMove, finishGame: finishGame, saveMyRating: saveMyRating,
       cancelGame: cancelGame, myGames: myGames, whoami: function () { return me; } };
   })();
@@ -1639,6 +1718,7 @@ var AI = (function (KE, F, CORE) {
       lost = { silver: 0, red: 0 }; history = []; scoredWinner = null;
       moveCount = 0; moveLog = []; renderMoveLog(); winSounded = false; clockBase = 0; clockSince = Date.now();
       el("overlay").classList.remove("show");
+      el("chatwrap").style.display = "flex"; chatCount = 0; el("chatmsgs").innerHTML = "";
       netGame = { gid: gid, myColor: null, applied: 0, live: false, settled: false, names: {}, r0: {}, moves: {}, pumping: false, unwatch: null };
       netGame.unwatch = Net.watchGame(gid, function (g) {
         if (!g || !netGame || netGame.gid !== gid) return;
@@ -1652,6 +1732,8 @@ var AI = (function (KE, F, CORE) {
         netGame.rematch = g.rematch || null;
         netGame.first = g.first || "silver";
         netGame.wins = g.wins || {};
+        netGame.chat = g.chat || {};
+        renderChat();
         netGame.raw = g;
         if (state && state.winner) {
           var meU2 = Net.whoami();
