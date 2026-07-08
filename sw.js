@@ -1,5 +1,5 @@
 /* Laser Chess service worker — offline-first assets, network-first pages */
-var CACHE = "laser-chess-v27";
+var CACHE = "laser-chess-v28";
 var CORE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-512-maskable.png", "./apple-touch-icon.png"];
 
 self.addEventListener("install", function (e) {
@@ -21,7 +21,7 @@ self.addEventListener("fetch", function (e) {
   // Pages: network-first so updates apply on next launch; cache fallback keeps offline play working
   if (e.request.mode === "navigate") {
     e.respondWith(
-      fetch(e.request).then(function (res) {
+      fetch(e.request, { cache: "no-cache" }).then(function (res) {
         var copy = res.clone();
         caches.open(CACHE).then(function (c) { c.put(e.request, copy); }).catch(function () {});
         return res;
