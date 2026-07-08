@@ -178,11 +178,13 @@
   .overlay{position:absolute;inset:0;border-radius:16px;display:none;align-items:center;justify-content:center;
     background:rgba(6,9,15,.82);backdrop-filter:blur(3px);z-index:5;text-align:center;padding:20px}
   .overlay.show{display:flex}
-  /* full-screen sheets: lobby, mode picker, board picker — never collide with the page beneath */
-  #onlineoverlay,#modeoverlay,#layoutoverlay{position:fixed;inset:0;z-index:60;background:rgba(5,8,14,.95);
-    overflow-y:auto;-webkit-overflow-scrolling:touch;align-items:flex-start;justify-content:center;padding:14px 12px 40px}
-  #onlineoverlay .card,#modeoverlay .card,#layoutoverlay .card{background:#0c1422;border:1px solid var(--edge);
-    border-radius:16px;padding:18px 16px;margin:14px auto;box-shadow:0 12px 44px rgba(0,0,0,.55);width:100%}
+  /* full-screen sheets on MOBILE only — desktop keeps the compact over-the-board modal */
+  @media (max-width:760px){
+    #onlineoverlay,#modeoverlay,#layoutoverlay{position:fixed;inset:0;z-index:60;background:rgba(5,8,14,.95);
+      overflow-y:auto;-webkit-overflow-scrolling:touch;align-items:flex-start;justify-content:center;padding:14px 12px 40px}
+    #onlineoverlay .card,#modeoverlay .card,#layoutoverlay .card{background:#0c1422;border:1px solid var(--edge);
+      border-radius:16px;padding:18px 16px;margin:14px auto;box-shadow:0 12px 44px rgba(0,0,0,.55);width:100%}
+  }
   #overlay{background:rgba(6,9,15,.36);backdrop-filter:none;align-items:flex-end;padding-bottom:24px}
   #overlay .card{background:rgba(10,15,26,.82);border:1px solid var(--edge);border-radius:14px;padding:16px 20px;max-width:340px}
 
@@ -218,7 +220,7 @@
   <header class="top">
     <div class="brand">
       <h1>Laser&nbsp;Chess</h1>
-      <span class="sub">mirrors · beams · one exposed pharaoh · v33</span>
+      <span class="sub">mirrors · beams · one exposed pharaoh · v34</span>
     </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
       <div class="turnchip" id="ratingchip" title="Your Elo rating — every AI level has its own rating; wins and losses move yours like chess.com">⚡&nbsp;<b id="ratingval" style="color:var(--gold)">800</b>&nbsp;<span id="ratingdelta" style="display:none"></span></div>
@@ -1940,9 +1942,11 @@ var AI = (function (KE, F, CORE) {
       el("duelbanner").style.display = "none"; incomingDuel = null;
     }
     function statusRank(st) { return st === "lobby" ? 0 : st === "ingame" ? 1 : 2; }
-    var rosterSort = "status", rosterFilter = "", lastRoster = null;
+    var rosterSort = "status", rosterDir = 1, rosterFilter = "", lastRoster = null;
     function sortArrow(key) {
-      return rosterSort === key ? ' <span style="color:var(--gold)">▼</span>' : ' <span style="color:var(--faint)">⇅</span>';
+      if (rosterSort !== key) return ' <span style="color:var(--faint)">⇅</span>';
+      var down = key === "name" ? rosterDir === -1 : rosterDir === 1;
+      return ' <span style="color:var(--gold)">' + (down ? "▼" : "▲") + '</span>';
     }
     function renderRoster(users, status) {
       lastRoster = { users: users, status: status };
@@ -1952,9 +1956,10 @@ var AI = (function (KE, F, CORE) {
         return { uid: uid, name: u.name || "?", w: u.wins || 0, l: u.losses || 0, r: u.rating || 800, st: st };
       });
       if (rosterFilter) rows = rows.filter(function (p) { return p.name.toLowerCase().indexOf(rosterFilter) >= 0; });
-      rows.sort(rosterSort === "elo" ? function (a, b) { return b.r - a.r || statusRank(a.st) - statusRank(b.st); }
+      var base = rosterSort === "elo" ? function (a, b) { return b.r - a.r || statusRank(a.st) - statusRank(b.st); }
         : rosterSort === "name" ? function (a, b) { return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1; }
-        : function (a, b) { return statusRank(a.st) - statusRank(b.st) || b.r - a.r; });
+        : function (a, b) { return statusRank(a.st) - statusRank(b.st) || b.r - a.r; };
+      rows.sort(function (a, b) { return base(a, b) * rosterDir; });
       var dot = { lobby: "#43d17a", ingame: "var(--gold)", offline: "#7a3644" };
       var html = '<div class="prow phead">' +
         '<span data-sort="name"' + (rosterSort === "name" ? ' class="on"' : '') + ' title="Sort by name">PLAYER' + sortArrow("name") + '</span>' +
@@ -2206,7 +2211,13 @@ var AI = (function (KE, F, CORE) {
     });
     el("roster").addEventListener("click", function (e) {
       var srt = e.target.closest("[data-sort]");
-      if (srt) { rosterSort = srt.getAttribute("data-sort"); if (lastRoster) renderRoster(lastRoster.users, lastRoster.status); return; }
+      if (srt) {
+        var key = srt.getAttribute("data-sort");
+        if (rosterSort === key) rosterDir = -rosterDir; // same column: flip the order
+        else { rosterSort = key; rosterDir = 1; }
+        if (lastRoster) renderRoster(lastRoster.users, lastRoster.status);
+        return;
+      }
       var inv = e.target.closest(".pinv"); if (!inv) return;
       invitePlayer(inv.getAttribute("data-uid"), inv.getAttribute("data-name"));
     });
