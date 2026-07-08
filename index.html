@@ -74,13 +74,25 @@
   .mv.s{color:var(--silver-soft)} .mv.r{color:var(--red-soft)}
   .mv .cap{color:var(--gold);margin-left:auto;font-size:11px;white-space:nowrap}
   .movelog .hintempty{color:var(--faint);font-size:11px;padding:4px}
-  .prow{display:grid;grid-template-columns:1fr auto auto 16px;gap:8px;align-items:center;padding:6px 8px;border-radius:8px;
+  .prow{display:grid;grid-template-columns:1fr auto auto 16px;gap:8px;align-items:center;padding:0 8px;height:30px;border-radius:8px;
     font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--ink);text-align:left}
   .prow.phead{color:var(--faint);font-size:10px;letter-spacing:.12em;padding:2px 8px}
   .prow.invitable{cursor:pointer}
   .prow.invitable:hover{background:#1a2740}
   .prow .sub2{color:var(--muted)}
   .pdot{width:9px;height:9px;border-radius:50%;justify-self:center;box-shadow:0 0 8px currentColor}
+  .laycard{border:1px solid var(--edge);border-radius:10px;background:#0c1524;padding:8px 6px;cursor:pointer;text-align:center}
+  .laycard:hover{background:#152238}
+  .laycard.on{border-color:#4b8fc0;box-shadow:0 0 10px rgba(105,216,255,.25)}
+  .laycard .lname{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.15em;color:var(--muted);margin-top:5px;text-transform:uppercase}
+  .laymini{display:flex;gap:8px;overflow-x:auto;padding:2px 0;margin:0 0 10px}
+  .laymini .laycard{flex:0 0 auto;padding:5px 5px 4px}
+  .laymini .lname{font-size:9px;margin-top:3px}
+  [data-sort]{cursor:pointer;opacity:.7}
+  [data-sort].on{opacity:1;color:var(--gold)}
+  .emsearch{width:100%;box-sizing:border-box;background:#0a1320;border:1px solid var(--edge);border-radius:8px;color:var(--ink);
+    font-family:"IBM Plex Mono",monospace;font-size:13px;padding:7px 9px;margin:6px 0 2px}
+  .emsearch:focus{outline:none;border-color:#3f6f95}
   .segoff{opacity:.55;pointer-events:none}
   @media (max-width:700px){ .boardrow{flex-direction:column} #movelogwrap{width:auto;max-height:118px} }
   @media (min-width:1180px){
@@ -201,7 +213,7 @@
   <header class="top">
     <div class="brand">
       <h1>Laser&nbsp;Chess</h1>
-      <span class="sub">mirrors · beams · one exposed pharaoh · v26</span>
+      <span class="sub">mirrors · beams · one exposed pharaoh · v27</span>
     </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
       <div class="turnchip" id="ratingchip" title="Your Elo rating — every AI level has its own rating; wins and losses move yours like chess.com">⚡&nbsp;<b id="ratingval" style="color:var(--gold)">800</b>&nbsp;<span id="ratingdelta" style="display:none"></span></div>
@@ -213,6 +225,7 @@
   <div class="toolbar">
     <button class="primary" id="newgame">↻ New game</button>
     <button id="undo" disabled>↶ Undo</button>
+    <button id="lobbybtn" title="Back to the player dashboard — the game stays resumable" style="display:none">👥 Players</button>
     <button id="resign" title="Resign the online game" style="display:none">🏳 Resign</button>
     <button id="sndbtn" title="Sound effects">🔊</button>
     <button id="musbtn" title="Ambient music" style="opacity:.55">🎵</button>
@@ -246,9 +259,6 @@
     <svg class="board" id="svg" viewBox="0 0 640 524" aria-label="Laser Chess board"></svg>
     <div class="overlay show" id="modeoverlay"><div class="card">
       <h2 style="font-size:24px">New game</h2>
-      <div class="seg" id="setupseg" style="justify-content:center;margin-bottom:12px;flex-wrap:wrap">
-        <button data-setup="ace" class="on">Ace</button><button data-setup="curiosity">Curiosity</button><button data-setup="grail">Grail</button><button data-setup="mercury">Mercury</button>
-      </div>
       <p>Who's playing?</p>
       <button class="primary" id="modeai" style="width:100%;margin-bottom:10px;padding:14px">🤖&nbsp;&nbsp;Play the AI</button>
       <button id="mode2p" style="width:100%;padding:14px">👥&nbsp;&nbsp;Two players · this device</button>
@@ -260,7 +270,7 @@
         <input class="ov-input" id="f_email" type="email" placeholder="email" autocomplete="username">
         <input class="ov-input" id="f_pass" type="password" placeholder="password (6+)" autocomplete="current-password">
         <div style="display:flex;gap:6px">
-          <input class="ov-input" id="f_name" type="text" placeholder="username — emojis welcome 🔥" maxlength="20" style="flex:1">
+          <input class="ov-input" id="f_name" type="text" placeholder="username — shown to opponents" maxlength="20" style="flex:1">
           <button id="nameemo" title="Add an emoji" style="padding:0 12px;font-size:18px">😀</button>
         </div>
         <div id="nameemojipicker" style="display:none;max-height:150px;overflow-y:auto;text-align:left;border:1px solid var(--edge);border-radius:9px;padding:4px 8px 8px;margin:4px 0;background:#0c1524"></div>
@@ -277,8 +287,10 @@
         </div>
         <div style="text-align:left;margin-bottom:10px">
           <span class="hint" style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.2em;color:var(--faint)">PLAYERS — tap a green player to invite</span>
-          <div id="roster" style="max-height:200px;overflow-y:auto;margin-top:6px"><span class="hint">loading…</span></div>
+          <div id="roster" style="max-height:176px;overflow-y:auto;margin-top:6px"><span class="hint">loading…</span></div>
         </div>
+        <div style="text-align:left"><span class="hint" style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.2em;color:var(--faint)">BOARD</span></div>
+        <div class="laymini" id="lobbylayouts"></div>
         <button class="primary" id="hostbtn" style="width:100%;padding:13px">Host with a code instead</button>
         <div style="display:flex;gap:8px;margin:10px 0">
           <input class="ov-input" id="f_code" placeholder="CODE" maxlength="4" style="text-transform:uppercase;flex:1;margin:0">
@@ -286,7 +298,10 @@
         </div>
         <div class="ov-err" id="lobbyerr"></div>
         <div style="text-align:left"><span class="hint" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted)">Your games</span><div id="mygames" style="margin-top:6px"></div></div>
-        <button id="lobbyback" style="width:100%;margin-top:12px">Back</button>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button id="lobbyback" style="flex:1">Back</button>
+          <button id="logoutbtn" style="flex:1">Log out</button>
+        </div>
       </div>
       <div id="waitpane" style="display:none">
         <h2 style="font-size:20px">Share this code</h2>
@@ -295,6 +310,11 @@
         <p style="color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:12px">Your friend taps Play online → enters the code.<br>Game starts the moment they join.</p>
         <button id="waitcancel" style="width:100%;margin-top:8px">Cancel</button>
       </div>
+    </div></div>
+    <div class="overlay" id="layoutoverlay"><div class="card" style="max-width:420px">
+      <h2 style="font-size:22px">Choose a board</h2>
+      <div id="layoutgrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0"></div>
+      <button id="layoutback" style="width:100%">Back</button>
     </div></div>
     <div class="overlay" id="undooverlay"><div class="card" style="max-width:300px">
       <h2 style="font-size:22px;letter-spacing:.05em">Takeback?</h2>
@@ -831,10 +851,7 @@ var AI = (function (KE, F, CORE) {
       if (p.score) score = p.score;
       if (p.twoScore) twoScore = p.twoScore;
       if (p.emojiUse) { emojiUse = p.emojiUse; renderEmojiRow(); }
-      if (p.setup && ["ace","curiosity","grail","mercury"].indexOf(p.setup) >= 0) {
-        currentSetup = p.setup;
-        [].forEach.call(el("setupseg").children, function (c) { c.classList.toggle("on", c.getAttribute("data-setup") === currentSetup); });
-      }
+      if (p.setup && ["ace","curiosity","grail","mercury"].indexOf(p.setup) >= 0) currentSetup = p.setup;
       if (typeof p.adaptLevel === "number") adaptLevel = Math.max(1, Math.min(8, p.adaptLevel));
       if (p.snd === false) { Snd.setSfx(false); el("sndbtn").textContent = "🔇"; el("sndbtn").style.opacity = ".55"; }
       if (p.mus === true) { Snd.setMusic(true); el("musbtn").style.opacity = "1"; }
@@ -1195,13 +1212,22 @@ var AI = (function (KE, F, CORE) {
   el("chatsend").addEventListener("click", sendChatMsg);
   el("chatinput").addEventListener("keydown", function (e) { if (e.key === "Enter") sendChatMsg(); });
   var EMOJI_CATS = {
-    "😀": ["😀","😂","🤣","😅","😊","😉","😍","😎","🤔","😏","🙄","😴","🤯","😱","😭","😤","🥶","🤡","😈","🥲","🥳","😇","🫠","🤠"],
+    "😀": ["😀","😂","🤣","😅","😊","😉","😍","😎","🤔","😏","🙄","😴","🤯","😱","😭","😤","💀","🥶","🤡","😈","🥲","🥳","😇","🫠","🤠"],
     "👋": ["👋","🤝","👍","👎","👏","🙌","🫡","✌️","🤞","🤙","💪","👀","🤦","🤷","🙏","✍️","👑","🧠","🦾","🫰"],
     "❤️": ["❤️","🧡","💛","💚","💙","💜","🖤","💔","❤️‍🔥","💯","💥","✨","⭐","⚡","🔥","❄️","🌈","☀️","🌙","☄️"],
     "🎮": ["🎮","🎯","🏆","🥇","🥈","♟️","🎲","🃏","🕹️","⏳","🛡️","⚔️","💣","🧨","🚀","🛸","🎪","🪄","🧊","📣"],
     "🐸": ["🐸","🐶","🐱","🦊","🐻","🐼","🦁","🐮","🐷","🐔","🦅","🦉","🐍","🐢","🦈","🐙","🦀","🐝","🦋","🐺"],
     "🍕": ["🍕","🍔","🌭","🍟","🌮","🍣","🍩","🍪","🎂","🍺","🍻","🥃","☕","🥩","🍗","🥓","🌶️","🧂","🍿","🥶"],
     "🗿": ["🗿","💰","💎","🔑","🔒","📈","📉","🧲","💡","🛠️","🧰","🚗","✈️","🏔️","🌊","🎵","📸","🪦","🚨","🧯"]
+  };
+  var EMOJI_NAMES = {
+    "😀":"smile happy grin","💀":"skull dead death spooky rip","😂":"laugh lol joy tears funny cry","🤣":"rofl laugh rolling funny","😅":"sweat laugh relief nervous","😊":"smile blush happy","😉":"wink flirt","😍":"heart eyes love","😎":"cool sunglasses","🤔":"think hmm consider","😏":"smirk sly","🙄":"eye roll annoyed","😴":"sleep tired zzz","🤯":"mind blown explode wow","😱":"scream shock fear","😭":"cry sob sad tears","😤":"steam mad frustrated triumph","🥶":"cold freeze ice","🤡":"clown fool joke","😈":"devil evil smirk purple","🥲":"smile tear bittersweet","🥳":"party celebrate birthday","😇":"angel halo innocent","🫠":"melt melting embarrassed","🤠":"cowboy hat yeehaw",
+    "👋":"wave hello hi bye","🤝":"handshake deal agree","👍":"thumbs up yes good like","👎":"thumbs down no bad dislike","👏":"clap applause bravo","🙌":"raised hands praise hooray","🫡":"salute respect sir","✌️":"peace victory","🤞":"fingers crossed luck hope","🤙":"call me shaka hang loose","💪":"muscle strong flex gym","👀":"eyes look watching sus","🤦":"facepalm doh","🤷":"shrug dunno whatever","🙏":"pray please thanks hope","✍️":"write writing hand","👑":"crown king queen royal","🧠":"brain smart mind","🦾":"robot arm strong bionic","🫰":"finger heart money snap",
+    "❤️":"heart love red","🧡":"heart orange","💛":"heart yellow","💚":"heart green","💙":"heart blue","💜":"heart purple","🖤":"heart black dark","💔":"broken heart sad breakup","❤️‍🔥":"heart fire passion burning love","💯":"hundred perfect score keep it real","💥":"boom explosion collision bang","✨":"sparkles magic shiny clean","⭐":"star favorite","⚡":"lightning bolt zap electric fast elo","🔥":"fire hot flame lit burn heat","❄️":"snow snowflake cold winter ice","🌈":"rainbow pride color","☀️":"sun sunny bright day","🌙":"moon night crescent","☄️":"comet meteor space",
+    "🎮":"game controller video gaming","🎯":"target bullseye dart aim","🏆":"trophy win champion victory","🥇":"gold medal first winner","🥈":"silver medal second","♟️":"chess pawn strategy","🎲":"dice random gamble","🃏":"joker card wild","🕹️":"joystick arcade retro","⏳":"hourglass time waiting sand","🛡️":"shield defend protect","⚔️":"swords battle duel fight crossed","💣":"bomb explode danger","🧨":"dynamite firecracker tnt","🚀":"rocket launch ship space fast","🛸":"ufo alien saucer","🎪":"circus tent carnival","🪄":"magic wand spell","🧊":"ice cube cold frozen","📣":"megaphone announce loud",
+    "🐸":"frog pepe green","🐶":"dog puppy pet","🐱":"cat kitten pet","🦊":"fox sly","🐻":"bear","🐼":"panda","🦁":"lion king","🐮":"cow moo","🐷":"pig oink","🐔":"chicken rooster","🦅":"eagle bird america freedom","🦉":"owl wise night","🐍":"snake slither","🐢":"turtle slow","🦈":"shark jaws","🐙":"octopus","🦀":"crab","🐝":"bee buzz honey","🦋":"butterfly","🐺":"wolf howl",
+    "🍕":"pizza slice food","🍔":"burger hamburger food","🌭":"hotdog food","🍟":"fries food","🌮":"taco food mexican","🍣":"sushi fish japanese","🍩":"donut doughnut sweet","🍪":"cookie sweet","🎂":"cake birthday","🍺":"beer drink cheers","🍻":"beers cheers clink toast","🥃":"whiskey drink glass bourbon","☕":"coffee cup hot","🥩":"steak meat","🍗":"chicken drumstick","🥓":"bacon","🌶️":"pepper spicy hot chili","🧂":"salt salty","🍿":"popcorn movie snack drama","🥶":"cold freeze",
+    "🗿":"moai stone face rock statue chad","💰":"money bag rich cash","💎":"diamond gem rich","🔑":"key unlock","🔒":"lock secure locked","📈":"chart up stocks gains growth","📉":"chart down loss crash","🧲":"magnet attract","💡":"idea light bulb","🛠️":"tools hammer wrench fix","🧰":"toolbox tools","🚗":"car drive vehicle","✈️":"plane airplane travel fly","🏔️":"mountain snow peak alaska","🌊":"wave ocean water sea","🎵":"music note song","📸":"camera photo flash","🪦":"gravestone rip dead tombstone","🚨":"siren alarm police emergency","🧯":"extinguisher fire safety"
   };
   var EMOJI_DEFAULT = ["😂","🔥","💀","🫡","😤","👏","❤️","🤝"];
   function topEmojis(n) {
@@ -1216,11 +1242,26 @@ var AI = (function (KE, F, CORE) {
     el("emojirow").innerHTML = '<button id="emopen" title="All emojis">😀＋</button>' +
       quickList().map(function (e) { return "<button data-em='" + e + "'>" + e + "</button>"; }).join("");
   }
+  function emojiGridHtml(query, withFrequent) {
+    var btn = function (e) { return "<button data-em='" + e + "'>" + e + "</button>"; };
+    var q = (query || "").trim().toLowerCase();
+    if (q) {
+      var hits = [];
+      for (var em in EMOJI_NAMES) if (em === q || EMOJI_NAMES[em].indexOf(q) >= 0) hits.push(em);
+      return hits.length ? '<div class="egrid">' + hits.map(btn).join("") + "</div>"
+                         : '<div class="ecat">NO MATCH — try "fire", "laugh", "skull"…</div>';
+    }
+    var html = "", freq = withFrequent ? topEmojis(12) : [];
+    if (freq.length) html += '<div class="ecat">FREQUENT</div><div class="egrid">' + freq.map(btn).join("") + "</div>";
+    for (var k in EMOJI_CATS) html += '<div class="ecat">' + k + '</div><div class="egrid">' + EMOJI_CATS[k].map(btn).join("") + "</div>";
+    return html;
+  }
   function renderEmojiPicker() {
-    var html = "", freq = topEmojis(12);
-    if (freq.length) html += '<div class="ecat">FREQUENT</div><div class="egrid">' + freq.map(function (e) { return "<button data-em='" + e + "'>" + e + "</button>"; }).join("") + "</div>";
-    for (var k in EMOJI_CATS) html += '<div class="ecat">' + k + '</div><div class="egrid">' + EMOJI_CATS[k].map(function (e) { return "<button data-em='" + e + "'>" + e + "</button>"; }).join("") + "</div>";
-    el("emojipicker").innerHTML = html;
+    el("emojipicker").innerHTML = '<input class="emsearch" id="emsearch_chat" placeholder="search — e.g. fire">' +
+      '<div id="emgrid_chat">' + emojiGridHtml("", true) + "</div>";
+    el("emsearch_chat").addEventListener("input", function () {
+      el("emgrid_chat").innerHTML = emojiGridHtml(this.value, true);
+    });
   }
   function useEmoji(e) {
     el("chatinput").value += e;
@@ -1244,6 +1285,40 @@ var AI = (function (KE, F, CORE) {
     useEmoji(b.getAttribute("data-em"));
   });
   renderEmojiRow();
+  function setupThumb(name, c) {
+    var b = KE.newGame(name).board, W = 10 * c + 2, H = 8 * c + 2, s = c - 2;
+    var out = ['<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '">'];
+    out.push('<rect x="0" y="0" width="' + W + '" height="' + H + '" rx="3" fill="#0a1220" stroke="#22314e"/>');
+    out.push('<rect x="1" y="1" width="' + c + '" height="' + (8 * c) + '" fill="rgba(55,230,255,.10)"/>');
+    out.push('<rect x="' + (1 + 9 * c) + '" y="1" width="' + c + '" height="' + (8 * c) + '" fill="rgba(255,80,110,.10)"/>');
+    for (var k in b) {
+      var xy = k.split(","), X = 1 + (+xy[0]) * c + 1, Y = 1 + (+xy[1]) * c + 1, p = b[k];
+      var col = p.color === "silver" ? "#6fd4ff" : "#ff5c76";
+      if (p.type === "pharaoh") out.push('<circle cx="' + (X + s / 2) + '" cy="' + (Y + s / 2) + '" r="' + (s / 2) + '" fill="none" stroke="var(--gold)" stroke-width="1.4"/><circle cx="' + (X + s / 2) + '" cy="' + (Y + s / 2) + '" r="1.4" fill="var(--gold)"/>');
+      else if (p.type === "sphinx") out.push('<rect x="' + X + '" y="' + Y + '" width="' + s + '" height="' + s + '" rx="1.5" fill="' + col + '" opacity=".9"/>');
+      else if (p.type === "anubis") out.push('<rect x="' + X + '" y="' + Y + '" width="' + s + '" height="' + s + '" rx="1.5" fill="none" stroke="' + col + '" stroke-width="1.3"/>');
+      else if (p.type === "scarab") {
+        var d1 = (p.orient === "up" || p.orient === "down");
+        out.push(d1 ? '<line x1="' + X + '" y1="' + Y + '" x2="' + (X + s) + '" y2="' + (Y + s) + '" stroke="' + col + '" stroke-width="1.8"/>'
+                    : '<line x1="' + X + '" y1="' + (Y + s) + '" x2="' + (X + s) + '" y2="' + Y + '" stroke="' + col + '" stroke-width="1.8"/>');
+      } else { // pyramid: correct hypotenuse + solid wedge on the mirror side
+        var v;
+        if (p.orient === "up")    v = [[X, Y], [X + s, Y], [X + s, Y + s]];
+        else if (p.orient === "down") v = [[X, Y], [X, Y + s], [X + s, Y + s]];
+        else if (p.orient === "right") v = [[X, Y + s], [X + s, Y + s], [X + s, Y]];
+        else v = [[X, Y + s], [X, Y], [X + s, Y]];
+        out.push('<path d="M' + v.map(function (q) { return q.join(" "); }).join(" L") + ' Z" fill="' + col + '" opacity=".85"/>');
+      }
+    }
+    out.push('</svg>');
+    return out.join("");
+  }
+  var SETUP_NAMES = ["ace", "curiosity", "grail", "mercury"];
+  function renderLayoutCards(elId, c, selected) {
+    el(elId).innerHTML = SETUP_NAMES.map(function (n) {
+      return '<div class="laycard' + (n === selected ? " on" : "") + '" data-setup="' + n + '">' + setupThumb(n, c) + '<div class="lname">' + n + '</div></div>';
+    }).join("");
+  }
   function renderScore() {
     var L = el("scoreL"), R = el("scoreR"), V1 = el("scoreYou"), V2 = el("scoreAI"), chip = el("scorechip");
     if (netGame) { // all-time wins for both players in this match
@@ -1268,6 +1343,7 @@ var AI = (function (KE, F, CORE) {
     el("ratingchip").title = who ? ("Online rating — " + who.name + " · settles after every online game")
       : "Your Elo rating — every AI level has its own rating; wins and losses move yours like chess.com";
     renderScore();
+    el("lobbybtn").style.display = netGame ? "" : "none";
     if (!state) return;
     var t = state.turn;
     el("turntext").textContent = netGame
@@ -1286,6 +1362,7 @@ var AI = (function (KE, F, CORE) {
     } else rd.style.display = "none";
     el("undo").disabled = netGame ? !Online.canRequestUndo() : (busy || history.length === 0);
     el("resign").style.display = (netGame && netGame.live && !state.winner) ? "" : "none";
+    el("lobbybtn").style.display = netGame ? "" : "none";
     var meU0 = (typeof Net !== "undefined" && Net && Net.whoami) ? Net.whoami() : null;
     var req0 = netGame && netGame.undoReq;
     var showPrompt = !!(req0 && meU0 && req0.by !== meU0.uid && !state.winner);
@@ -1392,7 +1469,7 @@ var AI = (function (KE, F, CORE) {
 
   /* ---- input ---- */
   function onHit(x, y) {
-    if (busy || state.winner || !isHumanTurn()) return;
+    if (!state || busy || state.winner || !isHumanTurn()) return;
     if (selected && selected.x === x && selected.y === y) { selected = null; selMoves = []; render(); return; }
     if (selected) {
       var dest = null;
@@ -1489,17 +1566,27 @@ var AI = (function (KE, F, CORE) {
     moveCount = 0; moveLog = []; renderMoveLog(); winSounded = false; clockBase = 0; clockSince = Date.now();
     el("overlay").classList.remove("show");
     el("modeoverlay").classList.remove("show");
+    el("layoutoverlay").classList.remove("show");
     render();
     if (vsAI && humanColor === "red") aiMove(); // silver (AI) moves first
   }
-  el("setupseg").addEventListener("click", function (e) {
-    var b = e.target.closest("button[data-setup]"); if (!b) return;
-    currentSetup = b.getAttribute("data-setup");
-    [].forEach.call(this.children, function (c) { c.classList.toggle("on", c === b); });
+  var pendingMode = "ai";
+  function showLayoutPicker(mode) {
+    pendingMode = mode;
+    el("modeoverlay").classList.remove("show");
+    renderLayoutCards("layoutgrid", 9, currentSetup);
+    el("layoutoverlay").classList.add("show");
+  }
+  el("modeai").addEventListener("click", function () { showLayoutPicker("ai"); });
+  el("mode2p").addEventListener("click", function () { showLayoutPicker("2p"); });
+  el("layoutback").addEventListener("click", function () { el("layoutoverlay").classList.remove("show"); el("modeoverlay").classList.add("show"); });
+  el("layoutgrid").addEventListener("click", function (e) {
+    var card = e.target.closest(".laycard"); if (!card) return;
+    currentSetup = card.getAttribute("data-setup");
     saveProfile();
+    el("layoutoverlay").classList.remove("show");
+    startGame(pendingMode === "ai");
   });
-  el("modeai").addEventListener("click", function () { startGame(true); });
-  el("mode2p").addEventListener("click", function () { startGame(false); });
   function undo() {
     if (netGame) { Online.requestUndo(); return; }
     if (busy || !history.length) return;
@@ -1534,6 +1621,7 @@ var AI = (function (KE, F, CORE) {
   setInterval(function () { if (state) el("gametime").textContent = fmtClock(clockMs()); }, 500);
   el("newgame").addEventListener("click", newGame);
   el("undo").addEventListener("click", undo);
+  el("lobbybtn").addEventListener("click", function () { Online.toLobby(); });
   var resignArm = 0;
   el("resign").addEventListener("click", function () {
     if (!netGame || !netGame.live || state.winner || busy) return;
@@ -1554,9 +1642,11 @@ var AI = (function (KE, F, CORE) {
     var p = el("nameemojipicker");
     var opening = p.style.display !== "block";
     if (opening && !p.innerHTML) {
-      var html = "";
-      for (var k in EMOJI_CATS) html += '<div class="ecat">' + k + '</div><div class="egrid">' + EMOJI_CATS[k].map(function (e) { return "<button data-em='" + e + "'>" + e + "</button>"; }).join("") + "</div>";
-      p.innerHTML = html;
+      p.innerHTML = '<input class="emsearch" id="emsearch_name" placeholder="search — e.g. fire">' +
+        '<div id="emgrid_name">' + emojiGridHtml("", false) + "</div>";
+      el("emsearch_name").addEventListener("input", function () {
+        el("emgrid_name").innerHTML = emojiGridHtml(this.value, false);
+      });
     }
     p.style.display = opening ? "block" : "none";
   });
@@ -1735,12 +1825,14 @@ var AI = (function (KE, F, CORE) {
     var meListeners = [];
     function onMe(cb) { meListeners.push(cb); }
     function startMeSync(uid) {
-      db.ref("users/" + uid).on("value", function (s) {
+      var f = function (s) {
         if (!me || !s.exists()) return;
         var v = s.val();
         me.rating = v.rating; me.wins = v.wins; me.losses = v.losses; if (v.name) me.name = v.name;
-        meListeners.forEach(function (f) { try { f(); } catch (e) {} });
-      });
+        meListeners.forEach(function (fn) { try { fn(); } catch (e) {} });
+      };
+      db.ref("users/" + uid).on("value", f);
+      meSyncOff = function () { db.ref("users/" + uid).off("value", f); };
     }
     function initPresence() {
       try {
@@ -1770,6 +1862,15 @@ var AI = (function (KE, F, CORE) {
     function sendDuel(target, gid) { return db.ref("duels/" + target).set({ from: me.uid, name: me.name, gid: gid, at: Date.now() }); }
     function watchDuel(uid, cb) { var r = db.ref("duels/" + uid); var f = function (s) { cb(s.val()); }; r.on("value", f); return function () { r.off("value", f); }; }
     function clearDuel(uid) { return db.ref("duels/" + uid).remove(); }
+    var meSyncOff = null;
+    function logOut() {
+      var p = presence("offline");
+      return Promise.resolve(p).then(function () {
+        if (meSyncOff) { meSyncOff(); meSyncOff = null; }
+        me = null;
+        return auth.signOut ? auth.signOut() : Promise.resolve();
+      });
+    }
     function sendChat(gid, txt) {
       var key = "c" + Date.now() + "_" + Math.floor(Math.random() * 1e4);
       return db.ref("games/" + gid + "/chat/" + key).set({ by: me.uid, name: me.name, txt: txt, at: Date.now() });
@@ -1794,7 +1895,7 @@ var AI = (function (KE, F, CORE) {
           });
         });
     }
-    return { ensure: ensure, signUp: signUp, logIn: logIn, requestUndo: requestUndo, createRematch: createRematch, respondUndo: respondUndo, clearUndoResp: clearUndoResp, sendChat: sendChat, presence: presence, initPresence: initPresence, onMe: onMe, startMeSync: startMeSync, watchRoster: watchRoster, joinGame: joinGame, sendDuel: sendDuel, watchDuel: watchDuel, clearDuel: clearDuel, completeProfile: completeProfile, createGame: createGame, joinByCode: joinByCode,
+    return { ensure: ensure, signUp: signUp, logIn: logIn, requestUndo: requestUndo, createRematch: createRematch, respondUndo: respondUndo, clearUndoResp: clearUndoResp, sendChat: sendChat, logOut: logOut, presence: presence, initPresence: initPresence, onMe: onMe, startMeSync: startMeSync, watchRoster: watchRoster, joinGame: joinGame, sendDuel: sendDuel, watchDuel: watchDuel, clearDuel: clearDuel, completeProfile: completeProfile, createGame: createGame, joinByCode: joinByCode,
       watchGame: watchGame, sendMove: sendMove, finishGame: finishGame, voidGame: voidGame, saveMyRating: saveMyRating,
       cancelGame: cancelGame, myGames: myGames, whoami: function () { return me; } };
   })();
@@ -1821,14 +1922,18 @@ var AI = (function (KE, F, CORE) {
       el("duelbanner").style.display = "none"; incomingDuel = null;
     }
     function statusRank(st) { return st === "lobby" ? 0 : st === "ingame" ? 1 : 2; }
+    var rosterSort = "status", lastRoster = null;
     function renderRoster(users, status) {
+      lastRoster = { users: users, status: status };
       var meU = Net.whoami(); if (!meU) return;
       var rows = Object.keys(users).map(function (uid) {
         var u = users[uid] || {}, st = (status[uid] && status[uid].state) || "offline";
         return { uid: uid, name: u.name || "?", w: u.wins || 0, l: u.losses || 0, r: u.rating || 800, st: st };
-      }).sort(function (a, b) { return statusRank(a.st) - statusRank(b.st) || b.r - a.r; });
+      }).sort(rosterSort === "elo"
+        ? function (a, b) { return b.r - a.r || statusRank(a.st) - statusRank(b.st); }
+        : function (a, b) { return statusRank(a.st) - statusRank(b.st) || b.r - a.r; });
       var dot = { lobby: "#43d17a", ingame: "var(--gold)", offline: "#7a3644" };
-      var html = '<div class="prow phead"><span>PLAYER</span><span>W–L</span><span>⚡</span><span>●</span></div>';
+      var html = '<div class="prow phead"><span>PLAYER</span><span>W–L</span><span data-sort="elo"' + (rosterSort === "elo" ? ' class="on"' : '') + ' title="Sort by rating">⚡</span><span data-sort="status"' + (rosterSort === "status" ? ' class="on"' : '') + ' title="Sort by status">●</span></div>';
       html += rows.map(function (p) {
         var self = p.uid === meU.uid;
         var invitable = !self && p.st === "lobby";
@@ -1876,6 +1981,7 @@ var AI = (function (KE, F, CORE) {
       var me = Net.whoami();
       Net.presence("lobby");
       leaveLobbySubs();
+      renderLayoutCards("lobbylayouts", 6, currentSetup);
       rosterUnsub = Net.watchRoster(renderRoster);
       duelUnsub = Net.watchDuel(me.uid, onDuel);
       el("lobbywho").textContent = me.name + " · ⚡" + (me.rating || 800) + " · " + (me.wins || 0) + "W " + (me.losses || 0) + "L";
@@ -2062,7 +2168,15 @@ var AI = (function (KE, F, CORE) {
       el("authtoggle").textContent = signupMode ? "I already have an account" : "I need an account";
       el("autherr").textContent = "";
     });
+    el("lobbylayouts").addEventListener("click", function (e) {
+      var card = e.target.closest(".laycard"); if (!card) return;
+      currentSetup = card.getAttribute("data-setup");
+      saveProfile();
+      renderLayoutCards("lobbylayouts", 6, currentSetup);
+    });
     el("roster").addEventListener("click", function (e) {
+      var srt = e.target.closest("[data-sort]");
+      if (srt) { rosterSort = srt.getAttribute("data-sort"); if (lastRoster) renderRoster(lastRoster.users, lastRoster.status); return; }
       var row = e.target.closest(".prow.invitable"); if (!row) return;
       invitePlayer(row.getAttribute("data-uid"), row.getAttribute("data-name"));
     });
@@ -2076,6 +2190,14 @@ var AI = (function (KE, F, CORE) {
     el("dueldecline").addEventListener("click", function () {
       Net.clearDuel(Net.whoami().uid).catch(function () {});
       el("duelbanner").style.display = "none"; incomingDuel = null;
+    });
+    el("logoutbtn").addEventListener("click", function () {
+      leaveLobbySubs();
+      Net.logOut().then(function () {
+        el("f_pass").value = "";
+        pane("authpane");
+        updateChrome();
+      }).catch(function () { pane("authpane"); });
     });
     el("hostbtn").addEventListener("click", host);
     el("joinbtn").addEventListener("click", join);
@@ -2104,7 +2226,17 @@ var AI = (function (KE, F, CORE) {
       var gid = netGame.gid, raw = netGame.raw;
       Net.createRematch(gid, raw).then(function (newGid) { attach(newGid); }).catch(function () {});
     }
-    return { open: open, pump: pump, canRequestUndo: canRequestUndo, requestUndo: requestUndo, respond: respond, rematch: rematch };
+    function toLobby() { // park the game (it stays resumable) and return to the dashboard
+      if (netGame) { if (netGame.unwatch) netGame.unwatch(); netGame = null; }
+      gen++; busy = false; selected = null; selMoves = []; state = null;
+      el("chatwrap").style.display = "none";
+      el("overlay").classList.remove("show"); el("undooverlay").classList.remove("show");
+      el("svg").innerHTML = "";
+      el("controlstrip").innerHTML = '<span class="lbl">In the lobby — your game is saved under Your games.</span>';
+      updateChrome();
+      open();
+    }
+    return { open: open, pump: pump, canRequestUndo: canRequestUndo, requestUndo: requestUndo, respond: respond, rematch: rematch, toLobby: toLobby };
   })();
 
   Net.onMe(function () { // live profile: the ⚡ chip and lobby line follow cloud settles from ANY device
