@@ -81,9 +81,14 @@
   .prow.phead [data-sort]{user-select:none}
   .pinv,.phist{padding:3px 8px;font-size:13px;border-radius:8px}
   .pact{display:flex;gap:4px;justify-content:flex-end}
-  .hrow{font-family:"IBM Plex Mono",monospace;font-size:12px;padding:7px 8px;border-bottom:1px solid var(--grid);line-height:1.55}
-  .hrow b.w{color:var(--gold)} .hrow b.l{color:var(--red-soft)} .hrow b.v{color:var(--faint)}
-  .hrow .sub2{color:var(--muted)}
+  .hgrid{display:grid;grid-template-columns:44px 78px 1fr 40px 40px 40px;gap:6px;align-items:center;
+    font-family:"IBM Plex Mono",monospace;font-size:13px;padding:7px 6px;border-bottom:1px solid var(--grid);text-align:center}
+  .hgrid.hhead{color:var(--muted);font-size:15px;border-bottom:1px solid var(--edge);padding:4px 6px}
+  .hgrid .hopp{text-align:left;display:flex;align-items:center;gap:7px;min-width:0}
+  .hgrid .hopp span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hgrid b.w{color:var(--gold)} .hgrid b.l{color:var(--red-soft)} .hgrid b.v{color:var(--faint)}
+  .hdot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+  .hgrid .sub2{color:var(--muted);font-size:12px}
   .prow .sub2{color:var(--muted)}
   .pdot{width:9px;height:9px;border-radius:50%;justify-self:center;box-shadow:0 0 8px currentColor}
   .laycard{border:1px solid var(--edge);border-radius:10px;background:#0c1524;padding:8px 6px;cursor:pointer;text-align:center}
@@ -231,7 +236,7 @@
   <header class="top">
     <div class="brand">
       <h1>Laser&nbsp;Chess</h1>
-      <span class="sub">mirrors · beams · one exposed pharaoh · v41</span>
+      <span class="sub">mirrors · beams · one exposed pharaoh · v42</span>
     </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
       <div class="turnchip" id="ratingchip" title="Your Elo rating — every AI level has its own rating; wins and losses move yours like chess.com">⚡&nbsp;<b id="ratingval" style="color:var(--gold)">800</b>&nbsp;<span id="ratingdelta" style="display:none"></span></div>
@@ -283,7 +288,7 @@
       <button id="modeonline" style="width:100%;padding:14px;margin-top:10px">🌐&nbsp;&nbsp;Play online</button>
       <button id="moderesume" style="width:100%;margin-top:10px;display:none">←&nbsp;&nbsp;Back to game</button>
     </div></div>
-    <div class="overlay" id="onlineoverlay"><div class="card" style="max-width:490px;width:100%">
+    <div class="overlay" id="onlineoverlay"><div class="card" style="max-width:530px;width:100%">
       <div id="authpane" style="display:none">
         <h2 style="font-size:22px">Play online</h2>
         <input class="ov-input" id="f_email" type="email" placeholder="email" autocomplete="username">
@@ -2139,12 +2144,17 @@ var AI = (function (KE, F, CORE) {
           var l = done.filter(function (s) { return s.res === "L"; }).length;
           el("histsub").textContent = "Head-to-head: " + w + "–" + l + (done.length > w + l ? " (+" + (done.length - w - l) + " void)" : "");
         } else el("histsub").textContent = done.length + " finished game" + (done.length === 1 ? "" : "s");
-        el("histlist").innerHTML = done.length ? done.map(function (s) {
-          var d = s.at ? new Date(s.at).toLocaleDateString() : "—";
-          var tag = s.reason === "resign" ? " · resigned" : s.reason === "abandoned" ? " · abandoned" : "";
-          return '<div class="hrow"><b class="' + s.res.toLowerCase().charAt(0) + '">' + s.res + '</b> ' +
-            '<span class="sub2">' + d + '</span> vs ' + escHtml(s.opp) +
-            ' <span class="sub2">· ' + (s.mine === "silver" ? "as Silver" : "as Red") + ' · ' + s.moves + ' moves · you lost ' + s.lostMine + ', they lost ' + s.lostOpp + tag + '</span></div>';
+        var head = '<div class="hgrid hhead">' +
+          '<span title="Result">🏆</span><span title="Date">📅</span><span class="hopp" title="Opponent — the dot is the color you played">👤</span>' +
+          '<span title="Moves played">♟</span><span title="Pieces you lost">💀</span><span title="Pieces you took">💥</span></div>';
+        el("histlist").innerHTML = done.length ? head + done.map(function (s) {
+          var d = s.at ? new Date(s.at).toLocaleDateString(undefined, { month: "numeric", day: "numeric", year: "2-digit" }) : "—";
+          var tag = s.reason === "resign" ? " 🏳" : s.reason === "abandoned" ? " 🚫" : "";
+          var myDot = s.mine === "silver" ? "var(--silver)" : "var(--red)";
+          return '<div class="hgrid"><b class="' + s.res.toLowerCase().charAt(0) + '">' + (s.res === "void" ? "–" : s.res) + tag + '</b>' +
+            '<span class="sub2">' + d + '</span>' +
+            '<span class="hopp"><span class="hdot" style="background:' + myDot + '"></span><span>' + escHtml(s.opp) + '</span></span>' +
+            '<span>' + s.moves + '</span><span>' + s.lostMine + '</span><span>' + s.lostOpp + '</span></div>';
         }).join("") : "<span class='hint'>No finished games" + (filter ? " with " + escHtml(filter.name) : "") + " yet.</span>";
       }).catch(function () { el("histlist").innerHTML = "<span class='hint'>Couldn't load history.</span>"; });
     }
@@ -2216,6 +2226,7 @@ var AI = (function (KE, F, CORE) {
       lobby();
     }
     function attach(gid) {
+      closeSetupPicker();
       leaveLobbySubs();
       if (Net.whoami()) Net.presence("ingame");
       if (netGame && netGame.unwatch) netGame.unwatch();
@@ -2256,6 +2267,7 @@ var AI = (function (KE, F, CORE) {
         if (g.status === "done" && netGame.live && state && !state.winner) {
           if (g.winner) { state.winner = g.winner; showWin(); render(); }
           else if (g.reason === "abandoned") { // mutually abandoned from the lobby — no rating impact
+            closeSetupPicker();
             netGame.live = false; clockPause();
             el("ovtitle").textContent = "Game abandoned"; el("ovtitle").style.color = "var(--muted)";
             el("ovtext").textContent = "This game was closed out. No ratings changed.";
@@ -2430,7 +2442,13 @@ var AI = (function (KE, F, CORE) {
       var gid = netGame.gid, raw = netGame.raw;
       Net.createRematch(gid, raw).then(function (newGid) { attach(newGid); }).catch(function () {});
     }
+    function closeSetupPicker() {
+      el("layoutoverlay").classList.remove("show");
+      el("layoutback").style.display = "";
+      onlineSetupGid = null;
+    }
     function toLobby() { // park the game (it stays resumable) and return to the dashboard
+      closeSetupPicker();
       if (netGame) { if (netGame.unwatch) netGame.unwatch(); netGame = null; }
       gen++; busy = false; selected = null; selMoves = []; state = null;
       el("chatwrap").style.display = "none";
