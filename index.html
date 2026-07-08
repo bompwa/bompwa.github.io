@@ -227,7 +227,7 @@
   <header class="top">
     <div class="brand">
       <h1>Laser&nbsp;Chess</h1>
-      <span class="sub">mirrors · beams · one exposed pharaoh · v38</span>
+      <span class="sub">mirrors · beams · one exposed pharaoh · v39</span>
     </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
       <div class="turnchip" id="ratingchip" title="Your Elo rating — every AI level has its own rating; wins and losses move yours like chess.com">⚡&nbsp;<b id="ratingval" style="color:var(--gold)">800</b>&nbsp;<span id="ratingdelta" style="display:none"></span></div>
@@ -277,6 +277,7 @@
       <button class="primary" id="modeai" style="width:100%;margin-bottom:10px;padding:14px">🤖&nbsp;&nbsp;Play the AI</button>
       <button id="mode2p" style="width:100%;padding:14px">👥&nbsp;&nbsp;Two players · this device</button>
       <button id="modeonline" style="width:100%;padding:14px;margin-top:10px">🌐&nbsp;&nbsp;Play online</button>
+      <button id="moderesume" style="width:100%;margin-top:10px;display:none">←&nbsp;&nbsp;Back to game</button>
     </div></div>
     <div class="overlay" id="onlineoverlay"><div class="card" style="max-width:490px;width:100%">
       <div id="authpane" style="display:none">
@@ -329,6 +330,10 @@
     <div class="overlay" id="layoutoverlay"><div class="card" style="max-width:420px">
       <h2 style="font-size:22px">Choose a board</h2>
       <div id="layoutgrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0"></div>
+      <div id="firstmovewrap" style="display:none;margin:0 0 12px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.22em;color:var(--faint);margin-bottom:6px">FIRST MOVE</div>
+        <div class="seg" id="firstmoveseg" style="justify-content:center"><button data-first="silver" class="on">Silver — home team</button><button data-first="red">Red</button></div>
+      </div>
       <button id="layoutback" style="width:100%">Back</button>
     </div></div>
     <div class="overlay" id="undooverlay"><div class="card" style="max-width:300px">
@@ -1386,12 +1391,14 @@ var AI = (function (KE, F, CORE) {
     el("ratingchip").title = who ? ("Online rating — " + who.name + " · settles after every online game")
       : "Your Elo rating — every AI level has its own rating; wins and losses move yours like chess.com";
     renderScore();
-    el("lobbybtn").style.display = netGame ? "" : "none";
+    el("lobbybtn").style.display = (netGame || state) ? "" : "none";
     if (!state) return;
     var t = state.turn;
     el("turntext").textContent = netGame
       ? ((netGame.names[t] || (t === "silver" ? "Silver" : "Red")) + " to move" + (t === netGame.myColor ? " (you)" : ""))
-      : ((t === "silver" ? "Silver" : "Red") + " to move" + (vsAI && t === humanColor ? " (you)" : ""));
+      : (vsAI
+        ? ((t === "silver" ? "Silver" : "Red") + " to move" + (t === humanColor ? " (you)" : ""))
+        : ((t === "silver" ? (((who && who.name) || "Silver") + " (home)") : "Red") + " to move"));
     var dot = el("turnchip").querySelector(".dot");
     dot.style.color = t === "silver" ? "var(--silver)" : "var(--red)";
     el("lostS").textContent = lost.silver;
@@ -1405,7 +1412,6 @@ var AI = (function (KE, F, CORE) {
     } else rd.style.display = "none";
     el("undo").disabled = netGame ? !Online.canRequestUndo() : (busy || history.length === 0);
     el("resign").style.display = (netGame && netGame.live && !state.winner) ? "" : "none";
-    el("lobbybtn").style.display = netGame ? "" : "none";
     var meU0 = (typeof Net !== "undefined" && Net && Net.whoami) ? Net.whoami() : null;
     var req0 = netGame && netGame.undoReq;
     var showPrompt = !!(req0 && meU0 && req0.by !== meU0.uid && !state.winner);
@@ -1599,6 +1605,7 @@ var AI = (function (KE, F, CORE) {
     gen++;
     busy = false;
     el("overlay").classList.remove("show");
+    el("moderesume").style.display = (state && !state.winner && !netGame) ? "" : "none";
     el("modeoverlay").classList.add("show");
   }
   function startGame(withAI) {
@@ -1608,6 +1615,7 @@ var AI = (function (KE, F, CORE) {
     vsAI = withAI;
     gen++;
     state = KE.newGame(currentSetup); selected = null; selMoves = []; lastPath = null; flashCell = null; animMove = null; lastEcho = null; busy = false;
+    if (!withAI && twoPFirst === "red") state.turn = "red"; // pass-and-play: chosen opener, colors stay put
     lost = { silver: 0, red: 0 }; history = []; scoredWinner = null;
     moveCount = 0; moveLog = []; renderMoveLog(); winSounded = false; clockBase = 0; clockSince = Date.now();
     el("overlay").classList.remove("show");
@@ -1616,13 +1624,20 @@ var AI = (function (KE, F, CORE) {
     render();
     if (vsAI && humanColor === "red") aiMove(); // silver (AI) moves first
   }
-  var pendingMode = "ai";
+  var pendingMode = "ai", twoPFirst = "silver";
   function showLayoutPicker(mode) {
     pendingMode = mode;
     el("modeoverlay").classList.remove("show");
     renderLayoutCards("layoutgrid", 13, currentSetup);
+    el("firstmovewrap").style.display = mode === "2p" ? "" : "none";
+    [].forEach.call(el("firstmoveseg").children, function (c) { c.classList.toggle("on", c.getAttribute("data-first") === twoPFirst); });
     el("layoutoverlay").classList.add("show");
   }
+  el("firstmoveseg").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-first]"); if (!b) return;
+    twoPFirst = b.getAttribute("data-first");
+    [].forEach.call(this.children, function (c) { c.classList.toggle("on", c === b); });
+  });
   el("modeai").addEventListener("click", function () { showLayoutPicker("ai"); });
   el("mode2p").addEventListener("click", function () { showLayoutPicker("2p"); });
   el("layoutback").addEventListener("click", function () { el("layoutoverlay").classList.remove("show"); el("modeoverlay").classList.add("show"); });
@@ -1667,7 +1682,11 @@ var AI = (function (KE, F, CORE) {
   setInterval(function () { if (state) el("gametime").textContent = fmtClock(clockMs()); }, 500);
   el("newgame").addEventListener("click", newGame);
   el("undo").addEventListener("click", undo);
-  el("lobbybtn").addEventListener("click", function () { Online.toLobby(); });
+  el("lobbybtn").addEventListener("click", function () {
+    if (netGame) Online.toLobby(); // online: dashboard, game parked
+    else newGame();                // local: the mode picker, with Back to game available
+  });
+  el("moderesume").addEventListener("click", function () { el("modeoverlay").classList.remove("show"); render(); });
   var resignArm = 0;
   el("resign").addEventListener("click", function () {
     if (!netGame || !netGame.live || state.winner || busy) return;
@@ -1705,7 +1724,8 @@ var AI = (function (KE, F, CORE) {
   el("undodeny").addEventListener("click", function () { Online.respond(false); });
   el("ovrematch").addEventListener("click", function () {
     if (netGame) { Online.rematch(); return; }
-    startGame(vsAI); // local: instant same-mode rematch
+    if (!vsAI) twoPFirst = twoPFirst === "silver" ? "red" : "silver"; // pass-and-play rematch: the opener alternates
+    startGame(vsAI);
   });
   el("ovmenu").addEventListener("click", newGame);
   el("sideseg").addEventListener("click", function (e) {
