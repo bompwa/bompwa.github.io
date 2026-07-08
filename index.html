@@ -74,12 +74,16 @@
   .mv.s{color:var(--silver-soft)} .mv.r{color:var(--red-soft)}
   .mv .cap{color:var(--gold);margin-left:auto;font-size:11px;white-space:nowrap}
   .movelog .hintempty{color:var(--faint);font-size:11px;padding:4px}
-  .prow{display:grid;grid-template-columns:1fr 62px 62px 20px 48px;gap:8px;align-items:center;padding:0 8px;height:35px;border-radius:8px;
+  .prow{display:grid;grid-template-columns:1fr 58px 58px 18px 86px;gap:8px;align-items:center;padding:0 8px;height:35px;border-radius:8px;
     font-family:"IBM Plex Mono",monospace;font-size:14px;color:var(--ink);text-align:left}
   .prow>span:nth-child(2),.prow>span:nth-child(3){text-align:center}
   .prow.phead{color:var(--muted);font-size:15px;font-weight:600;letter-spacing:.06em;padding:2px 8px;height:37px}
   .prow.phead [data-sort]{user-select:none}
-  .pinv{padding:3px 8px;font-size:13px;border-radius:8px}
+  .pinv,.phist{padding:3px 8px;font-size:13px;border-radius:8px}
+  .pact{display:flex;gap:4px;justify-content:flex-end}
+  .hrow{font-family:"IBM Plex Mono",monospace;font-size:12px;padding:7px 8px;border-bottom:1px solid var(--grid);line-height:1.55}
+  .hrow b.w{color:var(--gold)} .hrow b.l{color:var(--red-soft)} .hrow b.v{color:var(--faint)}
+  .hrow .sub2{color:var(--muted)}
   .prow .sub2{color:var(--muted)}
   .pdot{width:9px;height:9px;border-radius:50%;justify-self:center;box-shadow:0 0 8px currentColor}
   .laycard{border:1px solid var(--edge);border-radius:10px;background:#0c1524;padding:8px 6px;cursor:pointer;text-align:center}
@@ -227,7 +231,7 @@
   <header class="top">
     <div class="brand">
       <h1>Laser&nbsp;Chess</h1>
-      <span class="sub">mirrors · beams · one exposed pharaoh · v39</span>
+      <span class="sub">mirrors · beams · one exposed pharaoh · v41</span>
     </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
       <div class="turnchip" id="ratingchip" title="Your Elo rating — every AI level has its own rating; wins and losses move yours like chess.com">⚡&nbsp;<b id="ratingval" style="color:var(--gold)">800</b>&nbsp;<span id="ratingdelta" style="display:none"></span></div>
@@ -305,6 +309,7 @@
           <input class="ov-input" id="psearch" placeholder="🔎 find a player" style="margin:6px 0 2px;padding:9px 10px;font-size:13px">
           <div id="roster" style="max-height:214px;overflow-y:auto;margin-top:4px"><span class="hint">loading…</span></div>
         </div>
+        <button id="histbtn" style="width:100%;margin:2px 0 10px">📜 Game history</button>
         <div style="text-align:left"><span class="hint" style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.2em;color:var(--faint)">BOARD</span></div>
         <div class="laymini" id="lobbylayouts"></div>
         <button class="primary" id="hostbtn" style="width:100%;padding:13px">Host with a code instead</button>
@@ -318,6 +323,12 @@
           <button id="lobbyback" style="flex:1">Back</button>
           <button id="logoutbtn" style="flex:1">Log out</button>
         </div>
+      </div>
+      <div id="histpane" style="display:none">
+        <h2 id="histtitle" style="font-size:20px">Game history</h2>
+        <div id="histsub" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);min-height:16px"></div>
+        <div id="histlist" style="max-height:300px;overflow-y:auto;text-align:left;margin:10px 0"></div>
+        <button id="histback" style="width:100%">Back</button>
       </div>
       <div id="waitpane" style="display:none">
         <h2 style="font-size:20px">Share this code</h2>
@@ -841,6 +852,7 @@ var AI = (function (KE, F, CORE) {
   var twoScore = { silver: 0, red: 0 }; // pass-and-play all-time tally (persists on this device)
   var emojiUse = {}; // per-emoji tap counts — powers the personal quick row
   var currentSetup = "ace"; // which official board layout new games use
+  var onlineSetupGid = null; // when set, the layout picker is choosing the board for this online game
   var netGame = null; // active online game: {gid, myColor, applied, live, settled, names, r0, moves, unwatch}
   function moverColor() { if (netGame) return netGame.myColor; return vsAI ? humanColor : (state ? state.turn : "silver"); }
   function isHumanTurn() {
@@ -1444,7 +1456,11 @@ var AI = (function (KE, F, CORE) {
       return;
     }
     if (!isHumanTurn()) {
-      var who = netGame ? ((netGame.names[state.turn] || "Opponent") + (netGame.live ? " is on the move… (you can close the app — the game keeps)" : "…")) : "Opponent is thinking…";
+      var who = netGame
+        ? (netGame.setupPending
+          ? ((netGame.names[netGame.first] || "Your opponent") + " is choosing the board…")
+          : ((netGame.names[state.turn] || "Opponent") + (netGame.live ? " is on the move… (you can close the app — the game keeps)" : "…")))
+        : "Opponent is thinking…";
       strip.innerHTML = '<span class="lbl" style="display:flex;align-items:center;gap:9px"><span class="spinner"></span>' + who + '</span>'; return; }
     if (!selected) { strip.innerHTML = '<span class="hint">Tap one of your pieces to see its legal moves.</span>'; return; }
     var p = KE.pieceAt(state, selected.x, selected.y);
@@ -1621,6 +1637,9 @@ var AI = (function (KE, F, CORE) {
     el("overlay").classList.remove("show");
     el("modeoverlay").classList.remove("show");
     el("layoutoverlay").classList.remove("show");
+    el("layoutback").style.display = "";
+    el("firstmovewrap").style.display = "";
+    onlineSetupGid = null;
     render();
     if (vsAI && humanColor === "red") aiMove(); // silver (AI) moves first
   }
@@ -1646,6 +1665,12 @@ var AI = (function (KE, F, CORE) {
     currentSetup = card.getAttribute("data-setup");
     saveProfile();
     el("layoutoverlay").classList.remove("show");
+    if (onlineSetupGid) { // the rematch opener just chose the board for both players
+      var gid0 = onlineSetupGid; onlineSetupGid = null;
+      el("layoutback").style.display = "";
+      Net.setSetup(gid0, currentSetup).catch(function () {});
+      return;
+    }
     startGame(pendingMode === "ai");
   });
   function undo() {
@@ -1872,6 +1897,14 @@ var AI = (function (KE, F, CORE) {
       return db.ref("games/" + gid).remove().catch(function () {})
         .then(function () { return db.ref("invites/" + code).remove(); }).catch(function () {});
     }
+    function myGamesAll() {
+      return db.ref("userGames/" + me.uid).get().then(function (s) {
+        if (!s.exists()) return [];
+        var ids = Object.keys(s.val()).slice(-40);
+        return Promise.all(ids.map(function (gid) { return db.ref("games/" + gid).get().then(function (g) { return { gid: gid, g: g.val() }; }); }))
+          .then(function (list) { return list.filter(function (e) { return e.g; }); });
+      });
+    }
     function myGames() {
       return db.ref("userGames/" + me.uid).get().then(function (s) {
         if (!s.exists()) return [];
@@ -1943,6 +1976,7 @@ var AI = (function (KE, F, CORE) {
         return auth.signOut ? auth.signOut() : Promise.resolve();
       });
     }
+    function setSetup(gid, name) { return db.ref("games/" + gid).update({ setup: name, setupPending: null }); }
     function sendChat(gid, txt) {
       var key = "c" + Date.now() + "_" + Math.floor(Math.random() * 1e4);
       return db.ref("games/" + gid + "/chat/" + key).set({ by: me.uid, name: me.name, txt: txt, at: Date.now() });
@@ -1959,7 +1993,7 @@ var AI = (function (KE, F, CORE) {
             var uS = rs[0].val() || {}, uR = rs[1].val() || {};
             var g = { status: "active", players: { silver: pS, red: pR }, names: { silver: nS, red: nR },
               ratings: { silver: uS.rating || 800, red: uR.rating || 800 }, wins: { silver: uS.wins || 0, red: uR.wins || 0 },
-              setup: old.setup || "ace", first: first, turn: first, createdAt: Date.now(), parent: oldGid };
+              setupPending: true, setupBy: first === "silver" ? pS : pR, first: first, turn: first, createdAt: Date.now(), parent: oldGid };
             return db.ref("games/" + newGid).set(g)
               .then(function () { return db.ref("userGames/" + pS + "/" + newGid).set(true); })
               .then(function () { return db.ref("userGames/" + pR + "/" + newGid).set(true); })
@@ -1967,14 +2001,14 @@ var AI = (function (KE, F, CORE) {
           });
         });
     }
-    return { ensure: ensure, signUp: signUp, logIn: logIn, requestUndo: requestUndo, createRematch: createRematch, respondUndo: respondUndo, clearUndoResp: clearUndoResp, sendChat: sendChat, logOut: logOut, presence: presence, initPresence: initPresence, onMe: onMe, startMeSync: startMeSync, watchRoster: watchRoster, joinGame: joinGame, sendDuel: sendDuel, watchDuel: watchDuel, clearDuel: clearDuel, completeProfile: completeProfile, createGame: createGame, joinByCode: joinByCode,
+    return { ensure: ensure, signUp: signUp, logIn: logIn, requestUndo: requestUndo, createRematch: createRematch, respondUndo: respondUndo, clearUndoResp: clearUndoResp, sendChat: sendChat, setSetup: setSetup, logOut: logOut, presence: presence, initPresence: initPresence, onMe: onMe, startMeSync: startMeSync, watchRoster: watchRoster, joinGame: joinGame, sendDuel: sendDuel, watchDuel: watchDuel, clearDuel: clearDuel, completeProfile: completeProfile, createGame: createGame, joinByCode: joinByCode,
       watchGame: watchGame, sendMove: sendMove, finishGame: finishGame, voidGame: voidGame, saveMyRating: saveMyRating,
-      cancelGame: cancelGame, myGames: myGames, whoami: function () { return me; } };
+      cancelGame: cancelGame, myGames: myGames, myGamesAll: myGamesAll, whoami: function () { return me; } };
   })();
 
   var Online = (function () {
     var signupMode = true, hosting = null;
-    function pane(id) { ["authpane", "lobbypane", "waitpane"].forEach(function (p) { el(p).style.display = p === id ? "block" : "none"; }); }
+    function pane(id) { ["authpane", "lobbypane", "waitpane", "histpane"].forEach(function (p) { el(p).style.display = p === id ? "block" : "none"; }); }
     function open() {
       el("modeoverlay").classList.remove("show");
       el("onlineoverlay").classList.add("show");
@@ -2026,7 +2060,8 @@ var AI = (function (KE, F, CORE) {
           '<span>' + escHtml(p.name) + (self ? ' <span class="sub2">(you)</span>' : '') + '</span>' +
           '<span class="sub2">' + p.w + '–' + p.l + '</span><span>' + p.r + '</span>' +
           '<span class="pdot" style="color:' + dot[p.st] + ';background:' + dot[p.st] + '"></span>' +
-          (invitable ? '<button class="pinv primary" data-uid="' + p.uid + '" data-name="' + escHtml(p.name) + '" title="Invite to play">⚔️</button>' : '<span></span>') +
+          '<span class="pact">' + (self ? '' : '<button class="phist" data-uid="' + p.uid + '" data-name="' + escHtml(p.name) + '" title="Your history vs ' + escHtml(p.name) + '">📜</button>') +
+          (invitable ? '<button class="pinv primary" data-uid="' + p.uid + '" data-name="' + escHtml(p.name) + '" title="Invite to play">⚔️</button>' : '') + '</span>' +
           '</div>';
       }).join("");
       if (!rows.length) html += '<span class="hint">No players match.</span>';
@@ -2064,6 +2099,54 @@ var AI = (function (KE, F, CORE) {
           attach(r.gid);
         });
       }).catch(function (e) { el("lobbyerr").textContent = e.message || "Couldn't invite"; });
+    }
+    function gameSummary(e, uid) {
+      var g = e.g, mine = g.players && g.players.silver === uid ? "silver" : "red";
+      var oppC = mine === "silver" ? "red" : "silver";
+      var lost = { silver: 0, red: 0 }, cnt = 0;
+      try {
+        var st = KE.newGame(g.setup || "ace");
+        st.turn = g.first || "silver";
+        var mv = g.moves && g.moves[cnt];
+        while (mv != null) {
+          var r = KE.applyTurn(st, mv, mv.c);
+          st = r.state;
+          if (r.destroyed) lost[r.destroyed.color]++;
+          cnt++; mv = g.moves[cnt];
+        }
+      } catch (err) {}
+      return {
+        gid: e.gid, at: g.endedAt || g.createdAt || 0,
+        opp: (g.names && g.names[oppC]) || "?", oppUid: g.players && g.players[oppC],
+        mine: mine, res: g.winner ? (g.winner === mine ? "W" : "L") : "void",
+        moves: cnt, lostMine: lost[mine], lostOpp: lost[oppC],
+        reason: g.reason || null
+      };
+    }
+    function openHistory(filter) {
+      var meU = Net.whoami(); if (!meU) return;
+      el("histtitle").textContent = filter ? "You vs " + filter.name : "Game history";
+      el("histsub").textContent = ""; el("histlist").innerHTML = "<span class='hint'>loading…</span>";
+      pane("histpane");
+      Net.myGamesAll().then(function (list) {
+        var done = list.filter(function (e) { return e.g.status === "done"; })
+          .map(function (e) { return gameSummary(e, meU.uid); });
+        if (filter) done = done.filter(function (s) { return s.oppUid === filter.uid; });
+        done.sort(function (a, b) { return b.at - a.at; });
+        done = done.slice(0, 30);
+        if (filter) {
+          var w = done.filter(function (s) { return s.res === "W"; }).length;
+          var l = done.filter(function (s) { return s.res === "L"; }).length;
+          el("histsub").textContent = "Head-to-head: " + w + "–" + l + (done.length > w + l ? " (+" + (done.length - w - l) + " void)" : "");
+        } else el("histsub").textContent = done.length + " finished game" + (done.length === 1 ? "" : "s");
+        el("histlist").innerHTML = done.length ? done.map(function (s) {
+          var d = s.at ? new Date(s.at).toLocaleDateString() : "—";
+          var tag = s.reason === "resign" ? " · resigned" : s.reason === "abandoned" ? " · abandoned" : "";
+          return '<div class="hrow"><b class="' + s.res.toLowerCase().charAt(0) + '">' + s.res + '</b> ' +
+            '<span class="sub2">' + d + '</span> vs ' + escHtml(s.opp) +
+            ' <span class="sub2">· ' + (s.mine === "silver" ? "as Silver" : "as Red") + ' · ' + s.moves + ' moves · you lost ' + s.lostMine + ', they lost ' + s.lostOpp + tag + '</span></div>';
+        }).join("") : "<span class='hint'>No finished games" + (filter ? " with " + escHtml(filter.name) : "") + " yet.</span>";
+      }).catch(function () { el("histlist").innerHTML = "<span class='hint'>Couldn't load history.</span>"; });
     }
     function lobby() {
       var me = Net.whoami();
@@ -2156,6 +2239,8 @@ var AI = (function (KE, F, CORE) {
         netGame.rematch = g.rematch || null;
         netGame.first = g.first || "silver";
         netGame.setup = g.setup || "ace";
+        netGame.setupPending = !!g.setupPending && !g.setup;
+        netGame.setupBy = g.setupBy || null;
         netGame.wins = g.wins || {};
         netGame.chat = g.chat || {};
         renderChat();
@@ -2178,6 +2263,19 @@ var AI = (function (KE, F, CORE) {
             el("overlay").classList.add("show");
             render();
           }
+        }
+        if (netGame.setupPending) { // the opener picks the board before anyone can move
+          var meU3 = Net.whoami();
+          if (meU3 && g.setupBy === meU3.uid && !netGame.pickerShown) {
+            netGame.pickerShown = true;
+            onlineSetupGid = gid;
+            renderLayoutCards("layoutgrid", 13, currentSetup);
+            el("firstmovewrap").style.display = "none";
+            el("layoutback").style.display = "none";
+            el("layoutoverlay").classList.add("show");
+          }
+          render();
+          return;
         }
         var cnt = cCount(netGame.moves);
         if (netGame.live && cnt < netGame.applied) rollbackTo(cnt);
@@ -2275,6 +2373,8 @@ var AI = (function (KE, F, CORE) {
         if (lastRoster) renderRoster(lastRoster.users, lastRoster.status);
         return;
       }
+      var hb = e.target.closest(".phist");
+      if (hb) { openHistory({ uid: hb.getAttribute("data-uid"), name: hb.getAttribute("data-name") }); return; }
       var inv = e.target.closest(".pinv"); if (!inv) return;
       invitePlayer(inv.getAttribute("data-uid"), inv.getAttribute("data-name"));
     });
@@ -2293,6 +2393,8 @@ var AI = (function (KE, F, CORE) {
       Net.clearDuel(Net.whoami().uid).catch(function () {});
       el("duelbanner").style.display = "none"; incomingDuel = null;
     });
+    el("histbtn").addEventListener("click", function () { openHistory(null); });
+    el("histback").addEventListener("click", function () { lobby(); });
     el("logoutbtn").addEventListener("click", function () {
       leaveLobbySubs();
       Net.logOut().then(function () {
