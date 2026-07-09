@@ -236,7 +236,7 @@
   <header class="top">
     <div class="brand">
       <h1>Laser&nbsp;Chess</h1>
-      <span class="sub">mirrors · beams · one exposed pharaoh · v44</span>
+      <span class="sub">mirrors · beams · one exposed pharaoh · v45</span>
     </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
       <div class="turnchip" id="ratingchip" title="Your Elo rating — every AI level has its own rating; wins and losses move yours like chess.com">⚡&nbsp;<b id="ratingval" style="color:var(--gold)">800</b>&nbsp;<span id="ratingdelta" style="display:none"></span></div>
@@ -346,6 +346,7 @@
     </div></div>
     <div class="overlay" id="layoutoverlay"><div class="card" style="max-width:420px">
       <h2 style="font-size:22px">Choose a board</h2>
+      <button id="layresume" class="primary" style="width:100%;padding:13px;margin:10px 0 2px;display:none">▶&nbsp;&nbsp;Resume game</button>
       <div id="layoutgrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0"></div>
       <div id="firstmovewrap" style="display:none;margin:0 0 12px">
         <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.22em;color:var(--faint);margin-bottom:6px">FIRST MOVE</div>
@@ -1525,6 +1526,7 @@ var AI = (function (KE, F, CORE) {
     pushLog(color, moverSnap, move, res.destroyed, res.winner);
     lastEcho = { t: move.t, x: move.x, y: move.y, tx: move.tx, ty: move.ty, c: color, mover: moverSnap, partner: partnerSnap };
     state.turn = color === "silver" ? "red" : "silver";
+    saveAI();
     render();
     await sleep(res.destroyed ? 380 : 140); if (gen !== myGen) return;
     flashCell = null; render();
@@ -1586,7 +1588,9 @@ var AI = (function (KE, F, CORE) {
 
   /* ---- win overlay ---- */
   var winSounded = false;
+  function showWinSave() { try { saveAI(); } catch (e) {} }
   function showWin() {
+    showWinSave();
     var w = state.winner;
     clockPause();
     if (!winSounded) {
@@ -1669,6 +1673,9 @@ var AI = (function (KE, F, CORE) {
     el("modeoverlay").classList.remove("show");
     renderLayoutCards("layoutgrid", 13, currentSetup);
     el("firstmovewrap").style.display = mode === "2p" ? "" : "none";
+    var sv = mode === "ai" ? loadAISave() : null;
+    el("layresume").style.display = sv ? "" : "none";
+    if (sv) el("layresume").textContent = "▶  Resume game — " + (sv.moveCount || 0) + " moves in";
     [].forEach.call(el("firstmoveseg").children, function (c) { c.classList.toggle("on", c.getAttribute("data-first") === twoPFirst); });
     el("layoutoverlay").classList.add("show");
   }
@@ -1679,6 +1686,10 @@ var AI = (function (KE, F, CORE) {
   });
   el("modeai").addEventListener("click", function () { showLayoutPicker("ai"); });
   el("mode2p").addEventListener("click", function () { showLayoutPicker("2p"); });
+  el("layresume").addEventListener("click", function () {
+    el("layoutoverlay").classList.remove("show");
+    resumeAI();
+  });
   el("layoutback").addEventListener("click", function () { el("layoutoverlay").classList.remove("show"); el("modeoverlay").classList.add("show"); });
   el("layoutgrid").addEventListener("click", function (e) {
     var card = e.target.closest(".laycard"); if (!card) return;
@@ -1726,7 +1737,7 @@ var AI = (function (KE, F, CORE) {
   }
   setInterval(function () { if (state) el("gametime").textContent = fmtClock(clockMs()); }, 500);
   el("newgame").addEventListener("click", newGame);
-  el("undo").addEventListener("click", undo);
+  el("undo").addEventListener("click", function () { undo(); saveAI(); });
   /* ===================== TUTORIAL ===================== */
   var tutStep = -1, tutHi = null;
   var TUT = [
@@ -1774,6 +1785,34 @@ var AI = (function (KE, F, CORE) {
     tutStep = 0;
     tutShow();
     el("controlstrip").innerHTML = '<span class="lbl">Tutorial — follow the guide up top.</span>';
+  }
+  /* ===================== AI GAME PERSISTENCE ===================== */
+  function saveAI() { // the AI game survives closing the app
+    if (!vsAI || netGame || !state) return;
+    try {
+      if (state.winner) { localStorage.removeItem("lc-aigame"); return; }
+      localStorage.setItem("lc-aigame", JSON.stringify({
+        state: state, lost: lost, moveCount: moveCount, history: history.slice(-30),
+        moveLog: moveLog.slice(-60), setup: currentSetup, human: humanColor, clock: clockMs()
+      }));
+    } catch (err) {}
+  }
+  function loadAISave() {
+    try {
+      var s = JSON.parse(localStorage.getItem("lc-aigame") || "null");
+      return (s && s.state && !s.state.winner) ? s : null;
+    } catch (err) { return null; }
+  }
+  function resumeAI() {
+    var s = loadAISave(); if (!s) return;
+    currentSetup = s.setup || currentSetup;
+    startGame(true); // clean scaffolding (net detach, chrome, overlays)
+    state = s.state; lost = s.lost || { silver: 0, red: 0 };
+    moveCount = s.moveCount || 0; history = s.history || []; moveLog = s.moveLog || [];
+    humanColor = s.human || humanColor;
+    clockBase = s.clock || 0; clockSince = Date.now();
+    renderMoveLog(); updateChrome(); render();
+    if (state.turn !== humanColor) aiMove(); // it was the AI's move when you left — it resumes thinking
   }
   el("modetut").addEventListener("click", startTutorial);
   el("tutskip").addEventListener("click", function () { tutEnd(); render(); });
