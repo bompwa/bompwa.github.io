@@ -236,7 +236,7 @@
   <header class="top">
     <div class="brand">
       <h1>Laser&nbsp;Chess</h1>
-      <span class="sub">mirrors · beams · one exposed pharaoh · v42</span>
+      <span class="sub">mirrors · beams · one exposed pharaoh · v44</span>
     </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
       <div class="turnchip" id="ratingchip" title="Your Elo rating — every AI level has its own rating; wins and losses move yours like chess.com">⚡&nbsp;<b id="ratingval" style="color:var(--gold)">800</b>&nbsp;<span id="ratingdelta" style="display:none"></span></div>
@@ -285,6 +285,7 @@
       <p>Who's playing?</p>
       <button class="primary" id="modeai" style="width:100%;margin-bottom:10px;padding:14px">🤖&nbsp;&nbsp;Play the AI</button>
       <button id="mode2p" style="width:100%;padding:14px">👥&nbsp;&nbsp;Two players · this device</button>
+      <button id="modetut" style="width:100%;padding:11px;margin-top:2px;font-size:14px">📖&nbsp;&nbsp;Tutorial — learn the pieces</button>
       <button id="modeonline" style="width:100%;padding:14px;margin-top:10px">🌐&nbsp;&nbsp;Play online</button>
       <button id="moderesume" style="width:100%;margin-top:10px;display:none">←&nbsp;&nbsp;Back to game</button>
     </div></div>
@@ -352,6 +353,15 @@
       </div>
       <button id="layoutback" style="width:100%">Back</button>
     </div></div>
+    <div id="tutpanel" style="display:none;position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:30;
+      width:min(94%,440px);background:#0c1422;border:1px solid var(--edge);border-radius:12px;padding:12px 14px;
+      box-shadow:0 10px 34px rgba(0,0,0,.5);font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.5;text-align:left">
+      <div id="tuttext"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+        <button id="tutskip" style="padding:6px 12px;font-size:12px">Skip</button>
+        <button id="tutnext" class="primary" style="padding:6px 14px;font-size:12px">Next →</button>
+      </div>
+    </div>
     <div class="overlay" id="undooverlay"><div class="card" style="max-width:300px">
       <h2 style="font-size:22px;letter-spacing:.05em">Takeback?</h2>
       <p><span id="undoname">Opponent</span> asks to take back their move.</p>
@@ -1084,6 +1094,10 @@ var AI = (function (KE, F, CORE) {
         parts.push('<rect x="' + (sX(sq[0], sq[1]) + 2) + '" y="' + (sY(sq[0], sq[1]) + 2) + '" width="' + (CELL - 4) + '" height="' + (CELL - 4) + '" rx="7" fill="none" stroke="#fff" stroke-width="2" opacity="0"><animate attributeName="opacity" values="0.5;0" dur="0.6s" fill="freeze"/></rect>');
       });
     }
+    // tutorial highlights: dashed gold rings on the pieces being explained
+    if (tutHi) tutHi.forEach(function (c) {
+      parts.push('<rect x="' + (sX(c[0], c[1]) + 3) + '" y="' + (sY(c[0], c[1]) + 3) + '" width="' + (CELL - 6) + '" height="' + (CELL - 6) + '" rx="10" fill="none" stroke="var(--gold)" stroke-width="2" stroke-dasharray="7 5" opacity="0.85"/>');
+    });
     // exoskeleton of the last completed move: wireframe at the origin + dashed path
     if (lastEcho && !animMove) {
       var eCol = lastEcho.c === "silver" ? "var(--silver)" : "var(--red)";
@@ -1645,6 +1659,7 @@ var AI = (function (KE, F, CORE) {
     el("layoutback").style.display = "";
     el("firstmovewrap").style.display = "";
     onlineSetupGid = null;
+    tutEnd();
     render();
     if (vsAI && humanColor === "red") aiMove(); // silver (AI) moves first
   }
@@ -1712,6 +1727,61 @@ var AI = (function (KE, F, CORE) {
   setInterval(function () { if (state) el("gametime").textContent = fmtClock(clockMs()); }, 500);
   el("newgame").addEventListener("click", newGame);
   el("undo").addEventListener("click", undo);
+  /* ===================== TUTORIAL ===================== */
+  var tutStep = -1, tutHi = null;
+  var TUT = [
+    { t: "<b>THE GOAL 👑</b> — Zap the enemy pharaoh with your laser. After <i>every</i> move, your sphinx fires automatically. If your own pharaoh gets hit — even by your own beam — you lose.", hi: "pharaoh" },
+    { t: "<b>THE SPHINX 🔺</b> — the laser cannon in the corner. It never moves and can't be destroyed — it only rotates between its two firing directions. Here's its beam:", hi: "sphinx", demo: true },
+    { t: "<b>THE PYRAMID ◣</b> — your mirror. The angled face bounces the beam 90°. A beam hitting any bare side destroys it. Positioning these is the heart of the game.", hi: "pyramid" },
+    { t: "<b>THE SCARAB ✕</b> — a double-sided mirror that can never be destroyed. Its special power: it may SWAP places with any adjacent pyramid or anubis — even your opponent's.", hi: "scarab" },
+    { t: "<b>THE ANUBIS ◼</b> — a shield. A beam to its FRONT face does nothing. Its sides and back are fatal. It guards your pharaoh.", hi: "anubis" },
+    { t: "<b>MOVING</b> — on your turn: step any one piece to an adjacent square (8 directions), or rotate it 90°. The hatched edge columns are reserved home territory — your pieces can't enter your opponent's.", hi: null },
+    { t: "<b>SANDBOX 🧪</b> — you now control BOTH sides. Move pieces, watch the beams bounce, try to snipe a pharaoh. Open ☰ Menu whenever you're done.", hi: null }
+  ];
+  function tutCells(kind) {
+    if (!kind || !state) return null;
+    var cells = [];
+    for (var k in state.board) if (state.board[k].type === kind) { var p = k.split(","); cells.push([+p[0], +p[1]]); }
+    return cells;
+  }
+  function tutShow() {
+    var s = TUT[tutStep];
+    el("tuttext").innerHTML = s.t;
+    el("tutnext").textContent = tutStep === TUT.length - 1 ? "Play ▶" : "Next →";
+    tutHi = tutCells(s.hi);
+    lastPath = null;
+    if (s.demo) { // fire a demo beam on a cloned board — the real game is untouched
+      try {
+        var clone = JSON.parse(JSON.stringify(state));
+        var mv = KE.legalMoves(clone, "silver").filter(function (m) { return m.t === "rotate"; })[0];
+        var res = KE.applyTurn(clone, mv, "silver");
+        lastPath = { path: res.path, color: "silver" };
+      } catch (err) {}
+    }
+    el("tutpanel").style.display = "block";
+    render();
+  }
+  function tutEnd() {
+    if (tutStep < 0) return;
+    tutStep = -1; tutHi = null; lastPath = null;
+    el("tutpanel").style.display = "none";
+  }
+  function startTutorial() {
+    var keep = currentSetup;
+    currentSetup = "ace";
+    startGame(false, "silver"); // sandbox: pass-and-play, silver opens
+    currentSetup = keep;
+    tutStep = 0;
+    tutShow();
+    el("controlstrip").innerHTML = '<span class="lbl">Tutorial — follow the guide up top.</span>';
+  }
+  el("modetut").addEventListener("click", startTutorial);
+  el("tutskip").addEventListener("click", function () { tutEnd(); render(); });
+  el("tutnext").addEventListener("click", function () {
+    if (tutStep >= TUT.length - 1) { tutEnd(); render(); return; }
+    tutStep++;
+    tutShow();
+  });
   el("lobbybtn").addEventListener("click", function () {
     if (netGame) Online.toLobby(); // online: dashboard, game parked
     else newGame();                // local: the mode picker, with Back to game available
@@ -1754,8 +1824,9 @@ var AI = (function (KE, F, CORE) {
   el("undodeny").addEventListener("click", function () { Online.respond(false); });
   el("ovrematch").addEventListener("click", function () {
     if (netGame) { Online.rematch(); return; }
-    if (!vsAI) twoPFirst = twoPFirst === "silver" ? "red" : "silver"; // pass-and-play rematch: the opener alternates
-    startGame(vsAI);
+    el("overlay").classList.remove("show");
+    if (!vsAI) twoPFirst = twoPFirst === "silver" ? "red" : "silver"; // fairness default — the chooser can override
+    showLayoutPicker(vsAI ? "ai" : "2p"); // every local rematch picks its board fresh
   });
   el("ovmenu").addEventListener("click", newGame);
   el("sideseg").addEventListener("click", function (e) {
@@ -1842,7 +1913,18 @@ var AI = (function (KE, F, CORE) {
       if (!/^[\w\p{Extended_Pictographic}\u200D\uFE0F\u{1F3FB}-\u{1F3FF}\u{1F1E6}-\u{1F1FF}]{2,20}$/u.test(name)) return Promise.reject(new Error("Username: 2-20 characters — letters, numbers, _ and emojis"));
       var lower = name.toLowerCase(), uid;
       return ensure()
-        .then(function () { return auth.createUserWithEmailAndPassword(email, pass); })
+        .then(function () {
+          return auth.createUserWithEmailAndPassword(email, pass).catch(function (e) {
+            if (e && e.code === "auth/email-already-in-use") // a duplicate tap or an existing account: just sign in
+              return auth.signInWithEmailAndPassword(email, pass).then(function (cred) {
+                return loadMe(cred.user.uid).then(function (m) {
+                  if (m) { initPresence(); startMeSync(cred.user.uid); throw { __done: m }; }
+                  return cred; // authenticated, profile still missing — continue the claim below
+                });
+              });
+            throw e;
+          });
+        })
         .then(function (cred) {
           uid = cred.user.uid;
           return db.ref("usernames/" + lower).transaction(function (cur) { return cur === null ? uid : undefined; });
@@ -1852,7 +1934,8 @@ var AI = (function (KE, F, CORE) {
           me = { uid: uid, name: name, rating: 800, wins: 0, losses: 0 };
           return db.ref("users/" + uid).set({ name: name, rating: 800, wins: 0, losses: 0, created: Date.now() });
         })
-        .then(function () { initPresence(); startMeSync(uid); return me; });
+        .then(function () { initPresence(); startMeSync(uid); return me; })
+        .catch(function (e) { if (e && e.__done) return e.__done; throw e; });
     }
     function logIn(email, pass) {
       return ensure().then(function () { return auth.signInWithEmailAndPassword(email, pass); })
@@ -2186,9 +2269,13 @@ var AI = (function (KE, F, CORE) {
     function submitAuth() {
       var email = el("f_email").value.trim(), pass = el("f_pass").value, name = el("f_name").value.trim();
       el("autherr").textContent = "";
+      var btn = el("authsubmit"), btnLabel = btn.textContent;
+      btn.disabled = true; btn.textContent = "…";
+      var unlock = function () { btn.disabled = false; btn.textContent = btnLabel; };
       var p = finishing ? Net.completeProfile(name)
         : (signupMode ? Net.signUp(email, pass, name) : Net.logIn(email, pass));
       p.then(function (m) {
+        unlock();
         try { localStorage.setItem("lc-email", email); } catch (err) {}
         if (!m) { // authenticated but profile missing (e.g. an earlier signup was cut short) — finish setup
           finishing = true;
@@ -2201,7 +2288,7 @@ var AI = (function (KE, F, CORE) {
         finishing = false;
         el("f_email").style.display = "block"; el("f_pass").style.display = "block"; el("authtoggle").style.display = "block";
         lobby();
-      }).catch(function (e) { el("autherr").textContent = (e && e.message) ? String(e.message).replace(/^Firebase: /, "").replace(/ \(auth.*\)\.?$/, "") : "Something went wrong"; });
+      }).catch(function (e) { unlock(); el("autherr").textContent = (e && e.message) ? String(e.message).replace(/^Firebase: /, "").replace(/ \(auth.*\)\.?$/, "") : "Something went wrong"; });
     }
     function host() {
       el("lobbyerr").textContent = "";
